@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { X, FileText, MessageSquare, Calendar, User, Phone, Mail, CheckCircle, XCircle, Clock, AlertTriangle, Edit, Trash2, Eye } from 'lucide-react';
+import AddAttendance from './AddAttendance';
+import AddDailyNote from './AddDailyNote';
 
 interface StudentModalProps {
   student: any;
@@ -14,6 +16,10 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
   const [selectedForm, setSelectedForm] = useState(null);
   const [selectedAttendanceRecord, setSelectedAttendanceRecord] = useState(null);
   const [detailView, setDetailView] = useState(null); // 'assessment', 'note', 'form', 'attendance'
+  
+  // New state for managing modals
+  const [isEditAttendanceOpen, setIsEditAttendanceOpen] = useState(false);
+  const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
 
   const handleBackToTabs = () => {
     setDetailView(null);
@@ -811,7 +817,7 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
       case 'attendance':
         return (
           <div className="space-y-6">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 mb-6">
               <button 
                 onClick={handleBackToTabs}
                 className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors duration-200"
@@ -819,61 +825,106 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
                 <span>← Back to Attendance</span>
               </button>
             </div>
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-gray-900">
-                  Attendance Details - {new Date(selectedAttendanceRecord?.date).toLocaleDateString()}
-                </h3>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getAttendanceColor(selectedAttendanceRecord?.status)}`}>
-                  {selectedAttendanceRecord?.status}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <label className="text-sm text-gray-600">Date</label>
-                  <p className="font-medium text-gray-900">{new Date(selectedAttendanceRecord?.date).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Status</label>
-                  <div className="flex items-center space-x-2">
-                    {getAttendanceIcon(selectedAttendanceRecord?.status)}
-                    <p className="font-medium text-gray-900 capitalize">{selectedAttendanceRecord?.status}</p>
+            
+            {/* Embedded Attendance Details View */}
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              {/* Header with student info and status */}
+              <div className="bg-gray-50 border-b border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <img
+                      src={studentDetails.avatar}
+                      alt={studentDetails.name}
+                      className="w-16 h-16 rounded-full object-cover"
+                    />
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">{studentDetails.name}</h3>
+                      <p className="text-gray-600">{studentDetails.programName}</p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(selectedAttendanceRecord?.date).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium ${getAttendanceColor(selectedAttendanceRecord?.status)}`}>
+                      {getAttendanceIcon(selectedAttendanceRecord?.status)}
+                      <span className="capitalize">{selectedAttendanceRecord?.status}</span>
+                    </div>
                   </div>
                 </div>
-                {selectedAttendanceRecord?.checkIn && (
+              </div>
+
+              {/* Attendance Information */}
+              <div className="p-6 space-y-6">
+                {/* Time Details */}
+                {selectedAttendanceRecord?.status !== 'absent' && (
                   <div>
-                    <label className="text-sm text-gray-600">Check-in Time</label>
-                    <p className="font-medium text-gray-900">{selectedAttendanceRecord.checkIn}</p>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                      <Clock className="w-5 h-5" />
+                      <span>Time Details</span>
+                    </h4>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600">Check-in Time</p>
+                          <p className="font-medium text-gray-900">{selectedAttendanceRecord?.checkIn || 'Not recorded'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Check-out Time</p>
+                          <p className="font-medium text-gray-900">{selectedAttendanceRecord?.checkOut || 'Not recorded'}</p>
+                        </div>
+                        {selectedAttendanceRecord?.checkIn && selectedAttendanceRecord?.checkOut && (
+                          <div>
+                            <p className="text-sm text-gray-600">Total Time</p>
+                            <p className="font-medium text-gray-900">
+                              {(() => {
+                                const checkIn = new Date(`2000-01-01 ${selectedAttendanceRecord.checkIn}`);
+                                const checkOut = new Date(`2000-01-01 ${selectedAttendanceRecord.checkOut}`);
+                                const diff = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+                                return `${diff.toFixed(1)} hours`;
+                              })()}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
-                {selectedAttendanceRecord?.checkOut && (
-                  <div>
-                    <label className="text-sm text-gray-600">Check-out Time</label>
-                    <p className="font-medium text-gray-900">{selectedAttendanceRecord.checkOut}</p>
+
+                {/* Notes */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                    <MessageSquare className="w-5 h-5" />
+                    <span>Notes</span>
+                  </h4>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {selectedAttendanceRecord?.notes ? (
+                      <p className="text-gray-700">{selectedAttendanceRecord.notes}</p>
+                    ) : (
+                      <p className="text-gray-500 italic">No additional notes for this attendance record.</p>
+                    )}
                   </div>
-                )}
-              </div>
-              {selectedAttendanceRecord?.checkIn && selectedAttendanceRecord?.checkOut && (
-                <div className="bg-blue-50 rounded-lg p-4 mb-6">
-                  <h4 className="font-medium text-blue-900 mb-2">Time Summary</h4>
-                  <p className="text-blue-800">
-                    Total time: {(() => {
-                      const checkIn = new Date(`2000-01-01 ${selectedAttendanceRecord.checkIn}`);
-                      const checkOut = new Date(`2000-01-01 ${selectedAttendanceRecord.checkOut}`);
-                      const diff = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-                      return `${diff.toFixed(1)} hours`;
-                    })()}
-                  </p>
                 </div>
-              )}
-              <div className="flex items-center space-x-3">
-                <button className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200">
-                  <Edit className="w-4 h-4" />
-                  <span>Edit Attendance</span>
-                </button>
-                <button className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors duration-200">
-                  <span>Add Note</span>
-                </button>
+
+                {/* Quick Actions */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h4>
+                  <div className="flex flex-wrap gap-3">
+                    <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                      <Edit className="w-4 h-4" />
+                      <span>Edit Attendance</span>
+                    </button>
+                    <button className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200">
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Add Note</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

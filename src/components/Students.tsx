@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Search, Plus, Filter, Eye, Edit, MoreVertical } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Plus, Filter, Eye, Edit, MoreVertical, Users, GraduationCap, Baby, MessageSquare, Heart } from 'lucide-react';
 import StudentCard from './StudentCard';
 import StudentModal from './StudentModal';
 import AddStudent from './AddStudent';
+import { useStudents } from '../hooks/useStudents';
 import EditStudent from './EditStudent';
 
 const Students: React.FC = () => {
@@ -12,63 +13,37 @@ const Students: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState('list'); // 'list', 'add', 'edit'
   const [editingStudent, setEditingStudent] = useState(null);
-  const [students, setStudents] = useState([
-    {
-      id: 1,
-      name: 'Emma Rodriguez',
-      age: 8,
-      program: 'academy',
-      programName: 'Brighter Future Academy',
-      lastSession: '2024-01-15',
-      status: 'active',
-      avatar: 'https://images.pexels.com/photos/4473864/pexels-photo-4473864.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop',
-      assessments: 3,
-      notes: 12
-    },
-    {
-      id: 2,
-      name: 'Michael Chen',
-      age: 6,
-      program: 'first-steps',
-      programName: 'First Steps',
-      lastSession: '2024-01-14',
-      status: 'active',
-      avatar: 'https://images.pexels.com/photos/5063389/pexels-photo-5063389.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop',
-      assessments: 2,
-      notes: 8
-    },
-    {
-      id: 3,
-      name: 'Isabella Garcia',
-      age: 10,
-      program: 'individual-therapy',
-      programName: 'Individual Therapy',
-      lastSession: '2024-01-12',
-      status: 'active',
-      avatar: 'https://images.pexels.com/photos/4473775/pexels-photo-4473775.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop',
-      assessments: 5,
-      notes: 18
-    },
-    {
-      id: 4,
-      name: 'Alex Thompson',
-      age: 7,
-      program: 'academy',
-      programName: 'Brighter Future Academy',
-      lastSession: '2024-01-13',
-      status: 'inactive',
-      avatar: 'https://images.pexels.com/photos/5063380/pexels-photo-5063380.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop',
-      assessments: 4,
-      notes: 15
-    }
-  ]);
+  // Use real data from Supabase
+  const { 
+    students: supabaseStudents, 
+    programs: supabasePrograms, 
+    loading, 
+    error, 
+    addStudent, 
+    updateStudent, 
+    deleteStudent,
+    getStudentsByProgram,
+    getProgramName 
+  } = useStudents();
 
+  // Transform students data for the UI
+  const students = supabaseStudents.map(student => ({
+    id: student.id,
+    name: student.name,
+    age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
+    program: student.program_id.toString(),
+    programName: getProgramName(student.program_id),
+    lastSession: student.updated_at ? new Date(student.updated_at).toISOString().split('T')[0] : 'Unknown',
+    status: student.status,
+    avatar: `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`,
+    assessments: 0, // Will be updated when forms are implemented
+    notes: 0 // Will be updated when daily notes are implemented
+  }));
+
+  // Transform programs data for the UI
   const programs = [
     { id: 'all', name: 'All Programs' },
-    { id: 'academy', name: 'Brighter Future Academy' },
-    { id: 'first-steps', name: 'First Steps' },
-    { id: 'consultancy', name: 'Consultancy' },
-    { id: 'individual-therapy', name: 'Individual Therapy' }
+    ...supabasePrograms.map(p => ({ id: p.id.toString(), name: p.name }))
   ];
 
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -99,14 +74,14 @@ const Students: React.FC = () => {
     setEditingStudent(null);
   };
 
-  const handleStatusToggle = (studentId: number, newStatus: string) => {
-    setStudents(prevStudents => 
-      prevStudents.map(student => 
-        student.id === studentId 
-          ? { ...student, status: newStatus }
-          : student
-      )
-    );
+  const handleStatusToggle = async (studentId: number, newStatus: string) => {
+    const result = await updateStudent(studentId, { status: newStatus });
+    if (result.success) {
+      // The hook will automatically update the local state
+      console.log('Student status updated successfully');
+    } else {
+      console.error('Failed to update student status:', result.error);
+    }
   };
 
   if (currentView === 'add') {
@@ -115,6 +90,52 @@ const Students: React.FC = () => {
 
   if (currentView === 'edit' && editingStudent) {
     return <EditStudent student={editingStudent} onBack={handleBackToList} />;
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Students</h1>
+            <p className="text-gray-600 mt-2">Loading student data...</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Loading students...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Students</h1>
+            <p className="text-gray-600 mt-2">Error loading student data</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="text-center py-12">
+            <div className="text-red-600 text-lg font-medium mb-2">Error Loading Students</div>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -172,6 +193,73 @@ const Students: React.FC = () => {
               ))}
             </select>
           </div>
+          </div>
+        </div>
+
+        {/* Program Summary */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Program Overview</h3>
+            <button
+              onClick={() => setSelectedProgram('all')}
+              className={`text-sm px-3 py-1 rounded-full transition-colors duration-200 ${
+                selectedProgram === 'all'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+              }`}
+            >
+              View All Programs
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {programs.filter(program => program.id !== 'all').map((program) => {
+              const programStudents = students.filter(s => s.program === program.id);
+              const activeStudents = programStudents.filter(s => s.status === 'active');
+              
+              // Get appropriate icon for each program
+              const getProgramIcon = (programId: string) => {
+                switch (programId) {
+                  case 'academy':
+                    return <GraduationCap className="w-8 h-8 text-blue-600" />;
+                  case 'first-steps':
+                    return <Baby className="w-8 h-8 text-green-600" />;
+                  case 'individual-therapy':
+                    return <Heart className="w-8 h-8 text-purple-600" />;
+                  case 'consultancy':
+                    return <MessageSquare className="w-8 h-8 text-orange-600" />;
+                  default:
+                    return <Users className="w-8 h-8 text-gray-600" />;
+                }
+              };
+              
+              return (
+                <div 
+                  key={program.id}
+                  className={`bg-white border-2 rounded-lg p-4 hover:shadow-lg transition-all duration-200 cursor-pointer ${
+                    selectedProgram === program.id 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedProgram(program.id)}
+                >
+                  <div className="text-center">
+                    <div className="flex justify-center mb-3">
+                      {getProgramIcon(program.id)}
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900 mb-1">
+                      {programStudents.length}
+                    </div>
+                    <div className="text-sm text-gray-600 mb-2 font-medium">{program.name}</div>
+                    <div className="text-xs text-green-600 font-medium mb-2">
+                      {activeStudents.length} active
+                    </div>
+                    <div className="text-xs text-blue-600 font-medium">
+                      {selectedProgram === program.id ? 'Selected' : 'Click to filter'}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

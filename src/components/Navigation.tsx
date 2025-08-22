@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard } from 'lucide-react';
+import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User } from 'lucide-react';
 
 interface NavigationProps {
   activeTab: string;
@@ -62,7 +62,15 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
-        <div className="flex items-center space-x-3 mb-4">
+        <div 
+          className={`flex items-center space-x-3 mb-4 p-2 rounded-lg cursor-pointer transition-colors duration-200 ${
+            activeTab === 'profile'
+              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+              : 'hover:bg-gray-50'
+          }`}
+          onClick={() => setActiveTab('profile')}
+          title="Click to view profile"
+        >
           <img
             src={user.avatar}
             alt={user.name}
@@ -71,7 +79,9 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
             <p className="text-xs text-gray-500 truncate">{user.role}</p>
+            <p className="text-xs text-blue-600 font-medium">View Profile</p>
           </div>
+          <User className="w-4 h-4 text-gray-400" />
         </div>
         <button className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors duration-200">
           <LogOut className="w-4 h-4" />

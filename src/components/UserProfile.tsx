@@ -1,234 +1,265 @@
-import React from 'react';
-import { X, Mail, Phone, Shield, Calendar, Clock, MapPin, User, Edit } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Save, Edit, User, Mail, Phone, MapPin, Building, Shield, Camera } from 'lucide-react';
 
 interface UserProfileProps {
-  user: any;
-  isOpen: boolean;
-  onClose: () => void;
-  onEdit?: () => void;
+  user: {
+    name: string;
+    role: string;
+    avatar: string;
+  };
+  onBack: () => void;
 }
 
-const UserProfile: React.FC<UserProfileProps> = ({ user, isOpen, onClose, onEdit }) => {
-  if (!isOpen) return null;
+const UserProfile: React.FC<UserProfileProps> = ({ user, onBack }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    name: user.name,
+    email: 'sarah.johnson@brighterfuture.edu',
+    phone: '(555) 123-4567',
+    address: '123 Education Street, City, State 12345',
+    department: 'Administration',
+    role: user.role,
+    bio: 'Experienced educational administrator with over 10 years of experience in special education and program management.',
+    avatar: user.avatar
+  });
 
-  const getRoleColor = (role: string) => {
-    switch (role.toLowerCase()) {
-      case 'administrator': return 'bg-red-100 text-red-800';
-      case 'teacher': return 'bg-blue-100 text-blue-800';
-      case 'therapist': return 'bg-green-100 text-green-800';
-      case 'parent': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'inactive': return 'bg-gray-100 text-gray-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const handleSave = () => {
+    // In a real app, this would save to an API
+    console.log('Saving profile:', formData);
+    setIsEditing(false);
+    // You could also update the parent component's user state here
   };
 
-  const getPermissionName = (permission: string) => {
-    const permissionMap: { [key: string]: string } = {
-      'all': 'Full System Access',
-      'students': 'Student Management',
-      'calendar': 'Calendar Access',
-      'notes': 'Daily Notes',
-      'therapy': 'Therapy Services',
-      'assessments': 'Assessments & Forms',
-      'reports': 'Reports & Analytics'
-    };
-    return permissionMap[permission] || permission;
+  const handleCancel = () => {
+    setFormData({
+      name: user.name,
+      email: 'sarah.johnson@brighterfuture.edu',
+      phone: '(555) 123-4567',
+      address: '123 Education Street, City, State 12345',
+      department: 'Administration',
+      role: user.role,
+      bio: 'Experienced educational administrator with over 10 years of experience in special education and program management.',
+      avatar: user.avatar
+    });
+    setIsEditing(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-4">
-            <img
-              src={user.avatar}
-              alt={user.name}
-              className="w-16 h-16 rounded-full object-cover"
-            />
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">{user.name}</h2>
-              <div className="flex items-center space-x-2 mt-1">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getRoleColor(user.role)}`}>
-                  {user.role}
-                </span>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(user.status)}`}>
-                  {user.status}
-                </span>
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-          >
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">User Profile</h1>
+          <p className="text-gray-600 mt-2">Manage your account information and preferences</p>
         </div>
+        <button
+          onClick={onBack}
+          className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200"
+        >
+          <X className="w-5 h-5" />
+          <span>Close</span>
+        </button>
+      </div>
 
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-          <div className="space-y-8">
-            {/* Contact Information */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                <User className="w-5 h-5" />
-                <span>Contact Information</span>
-              </h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center space-x-3">
-                    <Mail className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-600">Email</p>
-                      <p className="font-medium text-gray-900">{user.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Phone className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-600">Phone</p>
-                      <p className="font-medium text-gray-900">{user.phone}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <MapPin className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-600">Department</p>
-                      <p className="font-medium text-gray-900">{user.department}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Shield className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-600">Role</p>
-                      <p className="font-medium text-gray-900">{user.role}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* Profile Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-12 text-white">
+          <div className="flex items-center space-x-6">
+            <div className="relative">
+              <img
+                src={formData.avatar}
+                alt={formData.name}
+                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
+              />
+              {isEditing && (
+                <button className="absolute bottom-0 right-0 bg-white text-gray-700 p-2 rounded-full shadow-lg hover:bg-gray-50 transition-colors duration-200">
+                  <Camera className="w-4 h-4" />
+                </button>
+              )}
             </div>
-
-            {/* Account Information */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                <Calendar className="w-5 h-5" />
-                <span>Account Information</span>
-              </h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Join Date</p>
-                    <p className="font-medium text-gray-900">{new Date(user.joinDate).toLocaleDateString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Last Login</p>
-                    <p className="font-medium text-gray-900">{user.lastLogin}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Account Status</p>
-                    <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(user.status)}`}>
-                      {user.status}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">User ID</p>
-                    <p className="font-medium text-gray-900">#{user.id.toString().padStart(6, '0')}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Permissions */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                <Shield className="w-5 h-5" />
-                <span>Permissions & Access</span>
-              </h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {user.permissions.map((permission: string, index: number) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-gray-700">{getPermissionName(permission)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Activity Summary */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                <Clock className="w-5 h-5" />
-                <span>Activity Summary</span>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">24</div>
-                  <div className="text-sm text-blue-700">Sessions This Month</div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-green-600">156</div>
-                  <div className="text-sm text-green-700">Students Managed</div>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-purple-600">89</div>
-                  <div className="text-sm text-purple-700">Notes Created</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900">Created daily note for Emma Rodriguez</p>
-                    <p className="text-xs text-gray-500">2 hours ago</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900">Completed assessment for Michael Chen</p>
-                    <p className="text-xs text-gray-500">1 day ago</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900">Scheduled therapy session</p>
-                    <p className="text-xs text-gray-500">3 days ago</p>
-                  </div>
-                </div>
-              </div>
+              <h2 className="text-2xl font-bold">{formData.name}</h2>
+              <p className="text-blue-100">{formData.role}</p>
+              <p className="text-blue-100">{formData.department}</p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-          <button 
-            onClick={onEdit}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-          >
-            <Edit className="w-4 h-4" />
-            <span>Edit Profile</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-          >
-            Close
-          </button>
+        {/* Profile Content */}
+        <div className="p-8">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-semibold text-gray-900">Personal Information</h3>
+            {!isEditing ? (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              >
+                <Edit className="w-4 h-4" />
+                <span>Edit Profile</span>
+              </button>
+            ) : (
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleCancel}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Basic Information */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center space-x-2">
+                  <User className="w-4 h-4" />
+                  <span>Full Name</span>
+                </label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                ) : (
+                  <p className="text-gray-900">{formData.name}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center space-x-2">
+                  <Mail className="w-4 h-4" />
+                  <span>Email Address</span>
+                </label>
+                {isEditing ? (
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                ) : (
+                  <p className="text-gray-900">{formData.email}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center space-x-2">
+                  <Phone className="w-4 h-4" />
+                  <span>Phone Number</span>
+                </label>
+                {isEditing ? (
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                ) : (
+                  <p className="text-gray-900">{formData.phone}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Additional Information */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center space-x-2">
+                  <Building className="w-4 h-4" />
+                  <span>Department</span>
+                </label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="department"
+                    value={formData.department}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                ) : (
+                  <p className="text-gray-900">{formData.department}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center space-x-2">
+                  <Shield className="w-4 h-4" />
+                  <span>Role</span>
+                </label>
+                <p className="text-gray-900">{formData.role}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center space-x-2">
+                  <MapPin className="w-4 h-4" />
+                  <span>Address</span>
+                </label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                ) : (
+                  <p className="text-gray-900">{formData.address}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Bio Section */}
+          <div className="mt-8">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
+            {isEditing ? (
+              <textarea
+                name="bio"
+                value={formData.bio}
+                onChange={handleInputChange}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            ) : (
+              <p className="text-gray-700 leading-relaxed">{formData.bio}</p>
+            )}
+          </div>
+
+          {/* Account Settings */}
+          <div className="mt-8 pt-8 border-t border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Settings</h3>
+            <div className="space-y-3">
+              <button className="w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200">
+                Change Password
+              </button>
+              <button className="w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200">
+                Notification Preferences
+              </button>
+              <button className="w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200">
+                Privacy Settings
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

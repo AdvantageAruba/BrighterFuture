@@ -28,20 +28,20 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onSt
 
   const getProgramColor = (program: string) => {
     switch (program) {
-      case 'academy': return 'bg-blue-100 text-blue-800';
-      case 'first-steps': return 'bg-green-100 text-green-800';
-      case 'individual-therapy': return 'bg-purple-100 text-purple-800';
-      case 'consultancy': return 'bg-orange-100 text-orange-800';
+      case '1': return 'bg-blue-100 text-blue-800';      // Brighter Future Academy
+      case '2': return 'bg-green-100 text-green-800';    // First Steps
+      case '3': return 'bg-purple-100 text-purple-800';  // Individual Therapy
+      case '4': return 'bg-orange-100 text-orange-800';  // Consultancy
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getProgramBorderColor = (program: string) => {
     switch (program) {
-      case 'academy': return 'border-l-blue-500';
-      case 'first-steps': return 'border-l-green-500';
-      case 'individual-therapy': return 'border-l-purple-500';
-      case 'consultancy': return 'border-l-orange-500';
+      case '1': return 'border-l-blue-500';      // Brighter Future Academy
+      case '2': return 'border-l-green-500';    // First Steps
+      case '3': return 'border-l-purple-500';   // Individual Therapy
+      case '4': return 'border-l-orange-500';   // Consultancy
       default: return 'border-l-gray-500';
     }
   };

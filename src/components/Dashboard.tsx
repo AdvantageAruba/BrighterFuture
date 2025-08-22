@@ -1,64 +1,116 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Users, Calendar, FileText, TrendingUp, Clock, AlertCircle, MessageSquare } from 'lucide-react';
 import StatsCard from './StatsCard';
 import RecentActivity from './RecentActivity';
 import UpcomingEvents from './UpcomingEvents';
+import { useStudents } from '../hooks/useStudents';
+import { useAttendance } from '../hooks/useAttendance';
+import { useDailyNotes } from '../hooks/useDailyNotes';
 
 interface DashboardProps {
   setActiveTab: (tab: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
-  const stats = [
+  const { students, loading: studentsLoading, getStudentCountByStatus } = useStudents();
+  const { attendance, loading: attendanceLoading } = useAttendance();
+  const { dailyNotes, loading: notesLoading } = useDailyNotes();
+
+  const [stats, setStats] = useState([
     {
       title: 'Total Students',
-      value: '4',
-      change: '+12 this month',
+      value: '0',
+      change: 'Loading...',
       icon: Users,
       color: 'blue',
       onClick: () => setActiveTab('students')
     },
     {
-      title: 'Active Students',
-      value: '3',
-      change: '75% of total',
-      icon: Users,
-      color: 'green',
-      onClick: () => setActiveTab('students')
-    },
-    {
       title: 'Upcoming Sessions',
-      value: '34',
-      change: 'Today',
+      value: '0',
+      change: 'Loading...',
       icon: Calendar,
       color: 'green',
       onClick: () => setActiveTab('calendar')
     },
     {
       title: 'Pending Assessments',
-      value: '18',
-      change: 'Needs attention',
+      value: '0',
+      change: 'Loading...',
       icon: FileText,
       color: 'orange',
       onClick: () => setActiveTab('forms')
     },
     {
       title: 'New Notes',
-      value: '12',
-      change: 'Today',
+      value: '0',
+      change: 'Loading...',
       icon: MessageSquare,
       color: 'purple',
       onClick: () => setActiveTab('dailynotes')
     },
     {
       title: 'Pending Intakes',
-      value: '8',
-      change: 'Awaiting completion',
+      value: '0',
+      change: 'Loading...',
       icon: FileText,
       color: 'orange',
       onClick: () => setActiveTab('forms')
     }
-  ];
+  ]);
+
+  // Update stats when data loads
+  useEffect(() => {
+    if (!studentsLoading && !attendanceLoading && !notesLoading) {
+      const today = new Date().toISOString().split('T')[0];
+      const todayNotes = dailyNotes.filter(note => note.date === today);
+      const todayAttendance = attendance.filter(record => record.date === today);
+      const activeStudentsCount = students.filter(student => student.status === 'active').length;
+      
+      setStats([
+        {
+          title: 'Total Students',
+          value: students.length.toString(),
+          change: `${activeStudentsCount} active`,
+          icon: Users,
+          color: 'blue',
+          onClick: () => setActiveTab('students')
+        },
+        {
+          title: 'Today\'s Attendance',
+          value: todayAttendance.length.toString(),
+          change: `${todayAttendance.filter(r => r.status === 'present').length} present`,
+          icon: Calendar,
+          color: 'green',
+          onClick: () => setActiveTab('calendar')
+        },
+        {
+          title: 'Pending Assessments',
+          value: '0', // Will be updated when forms are implemented
+          change: 'Needs attention',
+          icon: FileText,
+          color: 'orange',
+          onClick: () => setActiveTab('forms')
+        },
+        {
+          title: 'Today\'s Notes',
+          value: todayNotes.length.toString(),
+          change: 'New today',
+          icon: MessageSquare,
+          color: 'purple',
+          onClick: () => setActiveTab('dailynotes')
+        },
+        {
+          title: 'Pending Intakes',
+          value: '0', // Will be updated when forms are implemented
+          change: 'Awaiting completion',
+          icon: FileText,
+          color: 'orange',
+          onClick: () => setActiveTab('forms')
+        }
+      ]);
+    }
+  }, [students, attendance, dailyNotes, studentsLoading, attendanceLoading, notesLoading]);
 
   const handleQuickAction = (action: string) => {
     switch (action) {

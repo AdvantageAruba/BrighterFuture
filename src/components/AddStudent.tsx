@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Save, User, Phone, Mail, Calendar, MapPin, FileText } from 'lucide-react';
+import { useStudents } from '../hooks/useStudents';
 
 interface AddStudentProps {
   onBack: () => void;
@@ -26,46 +27,109 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
     status: 'active'
   });
 
-  const programs = [
-    { id: 'academy', name: 'Brighter Future Academy' },
-    { id: 'first-steps', name: 'First Steps' },
-    { id: 'individual-therapy', name: 'Individual Therapy' },
-    { id: 'consultancy', name: 'Consultancy' }
-  ];
+  // Use real data from Supabase
+  const { programs: supabasePrograms, addStudent } = useStudents();
 
+  // Transform programs for UI
+  const programs = supabasePrograms.map(p => ({ 
+    id: p.id.toString(), 
+    name: p.name 
+  }));
+
+  // Mock teachers for now - will be updated when teachers table is implemented
   const teachers = [
-    { id: 'emily-smith', name: 'Ms. Emily Smith', program: 'academy' },
-    { id: 'michael-wilson', name: 'Dr. Michael Wilson', program: 'individual-therapy' },
-    { id: 'lisa-brown', name: 'Ms. Lisa Brown', program: 'first-steps' },
-    { id: 'sarah-johnson', name: 'Dr. Sarah Johnson', program: 'academy' },
-    { id: 'jennifer-davis', name: 'Ms. Jennifer Davis', program: 'consultancy' }
+    { id: 'emily-smith', name: 'Ms. Emily Smith', program: '1' },
+    { id: 'michael-wilson', name: 'Dr. Michael Wilson', program: '3' },
+    { id: 'lisa-brown', name: 'Ms. Lisa Brown', program: '2' },
+    { id: 'sarah-johnson', name: 'Dr. Sarah Johnson', program: '1' },
+    { id: 'jennifer-davis', name: 'Ms. Jennifer Davis', program: '4' }
   ];
 
+  // Mock classes for now - will be updated when classes table is implemented
   const classes = [
-    { id: 'grade-1a', name: 'Grade 1A', program: 'academy' },
-    { id: 'grade-1b', name: 'Grade 1B', program: 'academy' },
-    { id: 'grade-2a', name: 'Grade 2A', program: 'academy' },
-    { id: 'grade-2b', name: 'Grade 2B', program: 'academy' },
-    { id: 'early-learners', name: 'Early Learners', program: 'first-steps' },
-    { id: 'pre-k', name: 'Pre-K', program: 'first-steps' },
-    { id: 'individual-1', name: 'Individual Session Room 1', program: 'individual-therapy' },
-    { id: 'individual-2', name: 'Individual Session Room 2', program: 'individual-therapy' },
-    { id: 'consultation-a', name: 'Consultation Group A', program: 'consultancy' }
+    { id: 'grade-1a', name: 'Grade 1A', program: '1' },
+    { id: 'grade-1b', name: 'Grade 1B', program: '1' },
+    { id: 'grade-2a', name: 'Grade 2A', program: '1' },
+    { id: 'grade-2b', name: 'Grade 2B', program: '1' },
+    { id: 'early-learners', name: 'Early Learners', program: '2' },
+    { id: 'pre-k', name: 'Pre-K', program: '2' },
+    { id: 'individual-1', name: 'Individual Session Room 1', program: '3' },
+    { id: 'individual-2', name: 'Individual Session Room 2', program: '3' },
+    { id: 'consultation-a', name: 'Consultation Group A', program: '4' }
   ];
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [name]: value
+      };
+      
+      // Automatically calculate age when date of birth changes
+      if (name === 'dateOfBirth' && value) {
+        const birthDate = new Date(value);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        
+        // Adjust age if birthday hasn't occurred yet this year
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        
+        newData.age = age.toString();
+      }
+      
+      return newData;
+    });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would typically send the data to your backend
-    console.log('Student data:', formData);
-    alert('Student added successfully!');
-    onBack();
+    
+    if (isSubmitting) return; // Prevent double submission
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Validate required fields
+      if (!formData.firstName || !formData.lastName || !formData.dateOfBirth || !formData.program) {
+        alert('Please fill in all required fields');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Prepare student data for Supabase
+      const studentData = {
+        name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.parentEmail || '',
+        phone: formData.parentPhone || '',
+        date_of_birth: formData.dateOfBirth,
+        program_id: parseInt(formData.program),
+        status: formData.status,
+        enrollment_date: new Date().toISOString().split('T')[0],
+        notes: formData.notes || ''
+      };
+
+      // Save to Supabase
+      const result = await addStudent(studentData);
+      
+      if (result.success) {
+        console.log('Student added successfully:', result.data);
+        alert('Student added successfully!');
+        onBack();
+      } else {
+        alert(`Failed to add student: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error adding student:', error);
+      alert('Failed to add student. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -128,15 +192,16 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Age</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Age (Calculated)</label>
                 <input
                   type="number"
                   name="age"
                   value={formData.age}
-                  onChange={handleInputChange}
+                  readOnly
                   min="1"
                   max="18"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                  placeholder="Enter date of birth to calculate age"
                 />
               </div>
             </div>
@@ -379,10 +444,15 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
           </button>
           <button
             type="submit"
-            className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+            disabled={isSubmitting}
+            className={`flex items-center space-x-2 px-6 py-2 rounded-lg transition-colors duration-200 ${
+              isSubmitting 
+                ? 'bg-gray-400 text-white cursor-not-allowed' 
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
             <Save className="w-4 h-4" />
-            <span>Add Student</span>
+            <span>{isSubmitting ? 'Adding Student...' : 'Add Student'}</span>
           </button>
         </div>
       </form>

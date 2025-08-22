@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, User, MessageSquare, Tag, Calendar, Phone, AlertTriangle } from 'lucide-react';
+import { useStudents } from '../hooks/useStudents';
+import { useDailyNotes } from '../hooks/useDailyNotes';
 
 interface AddDailyNoteProps {
   isOpen: boolean;
   onClose: () => void;
+  selectedStudentId?: number; // Add this prop for pre-selecting a student
 }
 
-const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose }) => {
+const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedStudentId }) => {
   const [formData, setFormData] = useState({
     program: '',
     studentId: '',
@@ -27,36 +30,48 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose }) => {
     followUpAssignee: ''
   });
 
-  const programs = [
-    { id: 'academy', name: 'Brighter Future Academy' },
-    { id: 'first-steps', name: 'First Steps' },
-    { id: 'consultancy', name: 'Consultancy' },
-    { id: 'individual-therapy', name: 'Individual Therapy' }
-  ];
+  // Pre-populate form when a student is selected
+  useEffect(() => {
+    if (selectedStudentId) {
+      // Find the student's program based on the student ID
+      let studentProgram = '';
+      
+      for (const [program, students] of Object.entries(studentsByProgram)) {
+        const student = students.find((s: any) => s.id === selectedStudentId);
+        if (student) {
+          studentProgram = program;
+          break;
+        }
+      }
+      
+      setFormData(prev => ({
+        ...prev,
+        program: studentProgram,
+        studentId: selectedStudentId.toString()
+      }));
+    }
+  }, [selectedStudentId]);
 
-  // Students organized by program
-  const studentsByProgram = {
-    'academy': [
-      { id: 1, name: 'Emma Rodriguez', age: 8 },
-      { id: 4, name: 'Alex Thompson', age: 7 },
-      { id: 5, name: 'Sophie Martinez', age: 9 },
-      { id: 6, name: 'James Wilson', age: 8 }
-    ],
-    'first-steps': [
-      { id: 2, name: 'Michael Chen', age: 6 },
-      { id: 7, name: 'Olivia Davis', age: 5 },
-      { id: 8, name: 'Lucas Brown', age: 6 }
-    ],
-    'individual-therapy': [
-      { id: 3, name: 'Isabella Garcia', age: 10 },
-      { id: 9, name: 'Ethan Johnson', age: 9 },
-      { id: 10, name: 'Ava Miller', age: 11 }
-    ],
-    'consultancy': [
-      { id: 11, name: 'Noah Anderson', age: 8 },
-      { id: 12, name: 'Mia Taylor', age: 7 }
-    ]
-  };
+  // Use real data from Supabase
+  const { programs: supabasePrograms, students: supabaseStudents } = useStudents();
+  const { addDailyNote } = useDailyNotes();
+
+  // Transform programs for UI
+  const programs = supabasePrograms.map(p => ({ 
+    id: p.id.toString(), 
+    name: p.name 
+  }));
+
+  // Students organized by program using real data
+  const studentsByProgram = supabasePrograms.reduce((acc, program) => {
+    const programStudents = supabaseStudents.filter(student => student.program_id === program.id);
+    acc[program.id.toString()] = programStudents.map(student => ({
+      id: student.id,
+      name: student.name,
+      age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0
+    }));
+    return acc;
+  }, {} as Record<string, any[]>);
 
   const moods = [
     { id: 'very-happy', name: 'Very Happy', emoji: '😄' },
@@ -109,11 +124,55 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Daily note data:', formData);
-    alert('Daily note added successfully!');
-    onClose();
+    
+    // Validate form data
+    if (!formData.program || !formData.studentId) {
+      alert('Please select a program and student');
+      return;
+    }
+
+    try {
+      // Prepare note data for Supabase
+      const noteData = {
+        student_id: parseInt(formData.studentId),
+        program_id: parseInt(formData.program),
+        date: new Date().toISOString().split('T')[0],
+        notes: JSON.stringify({
+          category: formData.category,
+          overallMood: formData.overallMood,
+          generalNotes: formData.generalNotes,
+          behaviorNotes: formData.behaviorNotes,
+          academicProgress: formData.academicProgress,
+          socialInteraction: formData.socialInteraction,
+          activitiesParticipated: formData.activitiesParticipated,
+          achievementsSuccesses: formData.achievementsSuccesses,
+          concernsChallenges: formData.concernsChallenges,
+          tags: formData.tags,
+          priority: formData.priority,
+          parentContacted: formData.parentContacted,
+          parentContactNotes: formData.parentContactNotes,
+          followUpNeeded: formData.followUpNeeded,
+          followUpAssignee: formData.followUpAssignee
+        }),
+        created_by: 'Current User' // Will be updated when user authentication is implemented
+      };
+
+      // Save to Supabase
+      const result = await addDailyNote(noteData);
+      
+      if (result.success) {
+        console.log('Daily note added successfully');
+        alert('Daily note added successfully!');
+        onClose();
+      } else {
+        alert('Failed to add daily note. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error adding daily note:', error);
+      alert('Failed to add daily note. Please try again.');
+    }
   };
 
   const getAvailableStudents = () => {
@@ -132,7 +191,9 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose }) => {
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Add Daily Note</h2>
+            <h2 className="text-xl font-bold text-gray-900">
+          {selectedStudentId ? `Add Daily Note for ${studentsByProgram[formData.program as keyof typeof studentsByProgram]?.find((s: any) => s.id === selectedStudentId)?.name || 'Student'}` : 'Add Daily Note'}
+        </h2>
             <p className="text-gray-600">Record comprehensive observations and student progress</p>
           </div>
           <button

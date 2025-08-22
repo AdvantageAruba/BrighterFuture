@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, Calendar, Users, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { useStudents } from '../hooks/useStudents';
+import { useAttendance } from '../hooks/useAttendance';
 
 interface AddAttendanceProps {
   isOpen: boolean;
   onClose: () => void;
   selectedDate?: string;
+  existingRecord?: any; // Add this prop for editing existing records
+  studentId?: number; // Add this prop for editing specific student attendance
 }
 
-const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selectedDate }) => {
+const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selectedDate, existingRecord, studentId }) => {
   const [formData, setFormData] = useState({
     date: selectedDate || new Date().toISOString().split('T')[0],
     program: '',
@@ -22,48 +26,74 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
     notes: string;
   }}>({});
 
-  const programs = [
-    { id: 'academy', name: 'Brighter Future Academy' },
-    { id: 'first-steps', name: 'First Steps' },
-    { id: 'individual-therapy', name: 'Individual Therapy' },
-    { id: 'consultancy', name: 'Consultancy' }
-  ];
+  // Pre-populate form when editing existing record
+  useEffect(() => {
+    if (existingRecord && studentId) {
+      // Find the student's program and class based on the student ID
+      let studentProgram = '';
+      let studentClass = '';
+      
+      for (const [program, students] of Object.entries(studentsByProgram)) {
+        const student = students.find((s: any) => s.id === studentId);
+        if (student) {
+          studentProgram = program;
+          studentClass = student.classId;
+          break;
+        }
+      }
+      
+      setFormData({
+        date: existingRecord.date,
+        program: studentProgram,
+        class: studentClass,
+        notes: existingRecord.notes || ''
+      });
+      
+      setStudentAttendance({
+        [studentId]: {
+          status: existingRecord.status,
+          checkIn: existingRecord.checkIn || '',
+          checkOut: existingRecord.checkOut || '',
+          notes: existingRecord.notes || ''
+        }
+      });
+    }
+  }, [existingRecord, studentId]);
 
+  // Use real data from Supabase
+  const { programs: supabasePrograms, students: supabaseStudents } = useStudents();
+
+  // Transform programs for UI
+  const programs = supabasePrograms.map(p => ({ 
+    id: p.id.toString(), 
+    name: p.name 
+  }));
+
+  // Mock classes for now - will be updated when classes table is implemented
   const classes = [
-    { id: 'grade-1a', name: 'Grade 1A', program: 'academy' },
-    { id: 'grade-1b', name: 'Grade 1B', program: 'academy' },
-    { id: 'grade-2a', name: 'Grade 2A', program: 'academy' },
-    { id: 'grade-2b', name: 'Grade 2B', program: 'academy' },
-    { id: 'early-learners', name: 'Early Learners', program: 'first-steps' },
-    { id: 'pre-k', name: 'Pre-K', program: 'first-steps' },
-    { id: 'individual-1', name: 'Individual Session Room 1', program: 'individual-therapy' },
-    { id: 'individual-2', name: 'Individual Session Room 2', program: 'individual-therapy' },
-    { id: 'consultation-a', name: 'Consultation Group A', program: 'consultancy' }
+    { id: 'grade-1a', name: 'Grade 1A', program: '1' },
+    { id: 'grade-1b', name: 'Grade 1B', program: '1' },
+    { id: 'grade-2a', name: 'Grade 2A', program: '1' },
+    { id: 'grade-2b', name: 'Grade 2B', program: '1' },
+    { id: 'early-learners', name: 'Early Learners', program: '2' },
+    { id: 'pre-k', name: 'Pre-K', program: '2' },
+    { id: 'individual-1', name: 'Individual Session Room 1', program: '3' },
+    { id: 'individual-2', name: 'Individual Session Room 2', program: '3' },
+    { id: 'consultation-a', name: 'Consultation Group A', program: '4' }
   ];
 
-  // Students organized by program
-  const studentsByProgram = {
-    'academy': [
-      { id: 1, name: 'Emma Rodriguez', age: 8, class: 'Grade 2A', classId: 'grade-2a' },
-      { id: 4, name: 'Alex Thompson', age: 7, class: 'Grade 1B', classId: 'grade-1b' },
-      { id: 5, name: 'Sophie Martinez', age: 9, class: 'Grade 2B', classId: 'grade-2b' },
-      { id: 6, name: 'James Wilson', age: 8, class: 'Grade 2A', classId: 'grade-2a' }
-    ],
-    'first-steps': [
-      { id: 2, name: 'Michael Chen', age: 6, class: 'Early Learners', classId: 'early-learners' },
-      { id: 7, name: 'Olivia Davis', age: 5, class: 'Pre-K', classId: 'pre-k' },
-      { id: 8, name: 'Lucas Brown', age: 6, class: 'Early Learners', classId: 'early-learners' }
-    ],
-    'individual-therapy': [
-      { id: 3, name: 'Isabella Garcia', age: 10, class: 'Individual Session Room 1', classId: 'individual-1' },
-      { id: 9, name: 'Ethan Johnson', age: 9, class: 'Individual Session Room 2', classId: 'individual-2' },
-      { id: 10, name: 'Ava Miller', age: 11, class: 'Individual Session Room 1', classId: 'individual-1' }
-    ],
-    'consultancy': [
-      { id: 11, name: 'Noah Anderson', age: 8, class: 'Consultation Group A', classId: 'consultation-a' },
-      { id: 12, name: 'Mia Taylor', age: 7, class: 'Consultation Group A', classId: 'consultation-a' }
-    ]
-  };
+  // Students organized by program using real data
+  const studentsByProgram = supabasePrograms.reduce((acc, program) => {
+    const programStudents = supabaseStudents.filter(student => student.program_id === program.id);
+    acc[program.id.toString()] = programStudents.map(student => ({
+      id: student.id,
+      name: student.name,
+      age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
+      class: 'Default Class', // Will be updated when classes are implemented
+      classId: 'default'
+    }));
+    return acc;
+  }, {} as Record<string, any[]>);
 
   if (!isOpen) return null;
 
@@ -113,14 +143,62 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Attendance data:', {
-      ...formData,
-      studentAttendance
-    });
-    alert('Attendance recorded successfully!');
-    onClose();
+    
+    // Validate form data
+    if (!formData.program || !formData.date) {
+      alert('Please select a program and date');
+      return;
+    }
+
+    // Check if at least one student has attendance marked
+    const hasAttendance = Object.values(studentAttendance).some(att => att.status !== '');
+    if (!hasAttendance) {
+      alert('Please mark attendance for at least one student');
+      return;
+    }
+
+    try {
+      // Process attendance data and save to Supabase
+      const attendancePromises = Object.entries(studentAttendance).map(([studentId, att]) => {
+        if (att.status === '') return null; // Skip students with no status
+        
+        const attendanceData = {
+          student_id: parseInt(studentId),
+          date: formData.date,
+          status: att.status,
+          check_in: att.checkIn || null,
+          check_out: att.checkOut || null,
+          notes: att.notes || formData.notes
+        };
+
+        // If editing existing record, update it
+        if (existingRecord && parseInt(studentId) === studentId) {
+          return updateAttendance(existingRecord.id, attendanceData);
+        } else {
+          // Otherwise, create new record
+          return addAttendance(attendanceData);
+        }
+      }).filter(Boolean);
+
+      // Wait for all attendance records to be saved
+      const results = await Promise.all(attendancePromises);
+      
+      // Check if all operations were successful
+      const allSuccessful = results.every(result => result?.success);
+      
+      if (allSuccessful) {
+        console.log('Attendance saved successfully');
+        alert('Attendance recorded successfully!');
+        onClose();
+      } else {
+        alert('Some attendance records failed to save. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+      alert('Failed to save attendance. Please try again.');
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -146,8 +224,12 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Record Daily Attendance</h2>
-            <p className="text-gray-600">Mark attendance for students in the selected program</p>
+                    <h2 className="text-xl font-bold text-gray-900">
+          {existingRecord ? 'Edit Attendance' : 'Record Daily Attendance'}
+        </h2>
+        <p className="text-gray-600">
+          {existingRecord ? 'Update attendance information for the selected student' : 'Mark attendance for students in the selected program'}
+        </p>
           </div>
           <button
             onClick={onClose}
@@ -349,7 +431,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
               className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
             >
               <Save className="w-4 h-4" />
-              <span>Save Attendance</span>
+                              <span>{existingRecord ? 'Update Attendance' : 'Save Attendance'}</span>
             </button>
           </div>
         </form>

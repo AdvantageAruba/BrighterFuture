@@ -9,6 +9,7 @@ import DailyNotes from './components/DailyNotes';
 import Calendar from './components/Calendar';
 import ProgramManagement from './components/ProgramManagement';
 import Settings from './components/Settings';
+import UserProfile from './components/UserProfile';
 import Navigation from './components/Navigation';
 
 function App() {
@@ -39,10 +40,10 @@ function App() {
         return <ProgramManagement />;
       case 'settings':
         return <Settings />;
-      case 'billing':
-        return <Billing />;
+      case 'profile':
+        return <UserProfile user={user} onBack={() => setActiveTab('dashboard')} />;
       default:
-        return <Dashboard />;
+        return <Dashboard setActiveTab={setActiveTab} />;
     }
   };
 
