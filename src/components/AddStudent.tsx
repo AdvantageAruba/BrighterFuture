@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Save, User, Phone, Mail, Calendar, MapPin, FileText } from 'lucide-react';
 import { useStudents } from '../hooks/useStudents';
+import PictureUpload from './PictureUpload';
 
 interface AddStudentProps {
   onBack: () => void;
@@ -27,8 +28,10 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
     status: 'active'
   });
 
+  const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
+
   // Use real data from Supabase
-  const { programs: supabasePrograms, addStudent } = useStudents();
+  const { programs: supabasePrograms, addStudent, uploadStudentPicture } = useStudents();
 
   // Transform programs for UI
   const programs = supabasePrograms.map(p => ({ 
@@ -85,6 +88,8 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
     });
   };
 
+
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -119,6 +124,16 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
       
       if (result.success) {
         console.log('Student added successfully:', result.data);
+        
+        // Upload picture if one was selected
+        if (selectedPicture && result.data) {
+          const pictureResult = await uploadStudentPicture(result.data.id, selectedPicture);
+          if (!pictureResult.success) {
+            console.warn('Student created but picture upload failed:', pictureResult.error);
+            alert('Student created successfully, but picture upload failed. You can add a picture later.');
+          }
+        }
+        
         alert('Student added successfully!');
         onBack();
       } else {
@@ -205,6 +220,18 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Student Picture */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+              <User className="w-5 h-5" />
+              <span>Profile Picture</span>
+            </h3>
+            <PictureUpload
+              onPictureChange={setSelectedPicture}
+              size="md"
+            />
           </div>
 
           {/* Program Selection */}

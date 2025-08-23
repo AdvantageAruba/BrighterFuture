@@ -11,6 +11,7 @@ export interface Student {
   status: string
   enrollment_date: string
   notes: string
+  picture_url?: string
   created_at: string
   updated_at: string
 }
@@ -141,6 +142,89 @@ export const useStudents = () => {
     return students.filter(student => student.status === status).length
   }
 
+  // Upload student picture
+  const uploadStudentPicture = async (studentId: number, file: File) => {
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${studentId}-${Date.now()}.${fileExt}`
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('student-pictures')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) throw uploadError
+
+      // Get public URL for the uploaded file
+      const { data: urlData } = supabase.storage
+        .from('student-pictures')
+        .getPublicUrl(fileName)
+
+      // Update student record with picture URL
+      const { error: updateError } = await supabase
+        .from('students')
+        .update({ picture_url: urlData.publicUrl })
+        .eq('id', studentId)
+
+      if (updateError) throw updateError
+
+      // Update local state
+      setStudents(prev => prev.map(student => 
+        student.id === studentId 
+          ? { ...student, picture_url: urlData.publicUrl }
+          : student
+      ))
+
+      return { success: true, url: urlData.publicUrl }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload picture')
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to upload picture' }
+    }
+  }
+
+  // Delete student picture
+  const deleteStudentPicture = async (studentId: number) => {
+    try {
+      const student = students.find(s => s.id === studentId)
+      if (!student?.picture_url) {
+        return { success: true } // No picture to delete
+      }
+
+      // Extract filename from URL
+      const urlParts = student.picture_url.split('/')
+      const fileName = urlParts[urlParts.length - 1]
+
+      // Delete from storage
+      const { error: deleteError } = await supabase.storage
+        .from('student-pictures')
+        .remove([fileName])
+
+      if (deleteError) throw deleteError
+
+      // Update student record to remove picture URL
+      const { error: updateError } = await supabase
+        .from('students')
+        .update({ picture_url: null })
+        .eq('id', studentId)
+
+      if (updateError) throw updateError
+
+      // Update local state
+      setStudents(prev => prev.map(student => 
+        student.id === studentId 
+          ? { ...student, picture_url: null }
+          : student
+      ))
+
+      return { success: true }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete picture')
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to delete picture' }
+    }
+  }
+
   useEffect(() => {
     fetchStudents()
     fetchPrograms()
@@ -157,6 +241,8 @@ export const useStudents = () => {
     getStudentsByProgram,
     getProgramName,
     getStudentCountByStatus,
+    uploadStudentPicture,
+    deleteStudentPicture,
     refreshStudents: fetchStudents,
     refreshPrograms: fetchPrograms
   }

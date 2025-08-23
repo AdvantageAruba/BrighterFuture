@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Save, User, Phone, Mail, Calendar, MapPin, FileText } from 'lucide-react';
+import PictureUpload from './PictureUpload';
 
 interface EditStudentProps {
   student: any;
@@ -26,6 +27,8 @@ const EditStudent: React.FC<EditStudentProps> = ({ student, onBack }) => {
     notes: 'Student shows excellent progress in group activities.',
     status: student.status || 'active'
   });
+
+  const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
 
   const programs = [
     { id: 'academy', name: 'Brighter Future Academy' },
@@ -60,6 +63,8 @@ const EditStudent: React.FC<EditStudentProps> = ({ student, onBack }) => {
       [name]: value
     }));
   };
+
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,6 +146,19 @@ const EditStudent: React.FC<EditStudentProps> = ({ student, onBack }) => {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Student Picture */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+              <User className="w-5 h-5" />
+              <span>Profile Picture</span>
+            </h3>
+            <PictureUpload
+              currentPicture={student.avatar}
+              onPictureChange={setSelectedPicture}
+              size="md"
+            />
           </div>
 
           {/* Program Selection */}

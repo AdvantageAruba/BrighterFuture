@@ -35,7 +35,7 @@ const Students: React.FC = () => {
     programName: getProgramName(student.program_id),
     lastSession: student.updated_at ? new Date(student.updated_at).toISOString().split('T')[0] : 'Unknown',
     status: student.status,
-    avatar: `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`,
+    avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`,
     assessments: 0, // Will be updated when forms are implemented
     notes: 0 // Will be updated when daily notes are implemented
   }));
