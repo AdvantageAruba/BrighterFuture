@@ -26,33 +26,72 @@ const Students: React.FC = () => {
     getProgramName 
   } = useStudents();
 
+  // Debug logging
+  console.log('Students component render:', {
+    supabaseStudents: supabaseStudents?.length || 0,
+    supabasePrograms: supabasePrograms?.length || 0,
+    loading,
+    error
+  });
+
   // Transform students data for the UI
-  const students = supabaseStudents.map(student => ({
-    id: student.id,
-    name: student.name,
-    age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
-    program: student.program_id.toString(),
-    programName: getProgramName(student.program_id),
-    lastSession: student.updated_at ? new Date(student.updated_at).toISOString().split('T')[0] : 'Unknown',
-    status: student.status,
-    avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`,
-    assessments: 0, // Will be updated when forms are implemented
-    notes: 0 // Will be updated when daily notes are implemented
-  }));
+  const students = (supabaseStudents && Array.isArray(supabaseStudents) ? supabaseStudents : []).map(student => {
+    try {
+      // Check if student has required properties
+      if (!student || typeof student !== 'object' || !student.id || !student.name) {
+        console.warn('Student missing required properties:', student);
+        return null;
+      }
+      
+      return {
+        id: student.id,
+        name: student.name,
+        age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
+        program: student.program_id ? student.program_id.toString() : '0',
+        programName: getProgramName && student.program_id ? getProgramName(student.program_id) : 'Unknown Program',
+        lastSession: student.updated_at ? new Date(student.updated_at).toISOString().split('T')[0] : 'Unknown',
+        status: student.status || 'unknown',
+        avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`,
+        assessments: 0, // Will be updated when forms are implemented
+        notes: 0 // Will be updated when daily notes are implemented
+      };
+    } catch (error) {
+      console.error('Error transforming student data:', error, student);
+      return null;
+    }
+  }).filter(Boolean); // Remove any null entries
 
   // Transform programs data for the UI
   const programs = [
     { id: 'all', name: 'All Programs' },
-    ...supabasePrograms.map(p => ({ id: p.id.toString(), name: p.name }))
+    ...(supabasePrograms && Array.isArray(supabasePrograms) ? supabasePrograms : []).map(p => {
+      try {
+        // Check if program has required properties
+        if (!p || typeof p !== 'object' || !p.id || !p.name) {
+          console.warn('Program missing required properties:', p);
+          return null;
+        }
+        return { id: p.id.toString(), name: p.name };
+      } catch (error) {
+        console.error('Error transforming program data:', error, p);
+        return null;
+      }
+    }).filter(Boolean)
   ];
 
   const [selectedStatus, setSelectedStatus] = useState('all');
 
-  const filteredStudents = students.filter(student => {
-    const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesProgram = selectedProgram === 'all' || student.program === selectedProgram;
-    const matchesStatus = selectedStatus === 'all' || student.status === selectedStatus;
-    return matchesSearch && matchesProgram && matchesStatus;
+  const filteredStudents = (students && Array.isArray(students) ? students : []).filter(student => {
+    try {
+      if (!student || !student.name) return false;
+      const matchesSearch = student.name.toLowerCase().includes((searchTerm || '').toLowerCase());
+      const matchesProgram = selectedProgram === 'all' || (selectedProgram && student.program === selectedProgram);
+      const matchesStatus = selectedStatus === 'all' || (selectedStatus && student.status === selectedStatus);
+      return matchesSearch && matchesProgram && matchesStatus;
+    } catch (error) {
+      console.error('Error filtering student:', error, student);
+      return false;
+    }
   });
 
   const handleViewStudent = (student: any) => {
@@ -63,6 +102,22 @@ const Students: React.FC = () => {
   const handleEditStudent = (student: any) => {
     setEditingStudent(student);
     setCurrentView('edit');
+  };
+
+  const handleDeleteStudent = async (studentId: number) => {
+    try {
+      const result = await deleteStudent(studentId);
+      if (result.success) {
+        console.log('Student deleted successfully');
+        // The hook will automatically update the local state
+      } else {
+        console.error('Failed to delete student:', result.error);
+        alert(`Failed to delete student: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting student:', error);
+      alert('Failed to delete student. Please try again.');
+    }
   };
 
   const handleAddStudent = () => {
@@ -84,16 +139,16 @@ const Students: React.FC = () => {
     }
   };
 
-  if (currentView === 'add') {
+  if (currentView === 'add' && AddStudent) {
     return <AddStudent onBack={handleBackToList} />;
   }
 
-  if (currentView === 'edit' && editingStudent) {
+  if (currentView === 'edit' && editingStudent && EditStudent) {
     return <EditStudent student={editingStudent} onBack={handleBackToList} />;
   }
 
   // Show loading state
-  if (loading) {
+  if (loading || !getProgramName || !addStudent || !updateStudent || !deleteStudent) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -138,21 +193,22 @@ const Students: React.FC = () => {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Students</h1>
-          <p className="text-gray-600 mt-2">Manage student profiles and track their progress</p>
+  try {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Students</h1>
+            <p className="text-gray-600 mt-2">Manage student profiles and track their progress</p>
+          </div>
+          <button 
+            onClick={handleAddStudent}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Student</span>
+          </button>
         </div>
-        <button 
-          onClick={handleAddStudent}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Student</span>
-        </button>
-      </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
@@ -161,8 +217,8 @@ const Students: React.FC = () => {
             <input
               type="text"
               placeholder="Search students..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={searchTerm || ''}
+              onChange={(e) => setSearchTerm(e.target.value || '')}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -170,8 +226,8 @@ const Students: React.FC = () => {
             <div className="flex items-center space-x-2">
               <Filter className="w-5 h-5 text-gray-400" />
               <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                value={selectedStatus || 'all'}
+                onChange={(e) => setSelectedStatus(e.target.value || 'all')}
                 className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Status</option>
@@ -182,15 +238,18 @@ const Students: React.FC = () => {
             <div className="flex items-center space-x-2">
             <Filter className="w-5 h-5 text-gray-400" />
             <select
-              value={selectedProgram}
-              onChange={(e) => setSelectedProgram(e.target.value)}
+              value={selectedProgram || 'all'}
+              onChange={(e) => setSelectedProgram(e.target.value || 'all')}
               className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {programs.map((program) => (
-                <option key={program.id} value={program.id}>
-                  {program.name}
-                </option>
-              ))}
+              {(programs && Array.isArray(programs) ? programs : []).map((program) => {
+                if (!program || !program.id || !program.name) return null;
+                return (
+                  <option key={program.id} value={program.id}>
+                    {program.name}
+                  </option>
+                );
+              })}
             </select>
           </div>
           </div>
@@ -203,7 +262,7 @@ const Students: React.FC = () => {
             <button
               onClick={() => setSelectedProgram('all')}
               className={`text-sm px-3 py-1 rounded-full transition-colors duration-200 ${
-                selectedProgram === 'all'
+                selectedProgram && selectedProgram === 'all'
                   ? 'bg-blue-100 text-blue-700 border border-blue-200'
                   : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
               }`}
@@ -212,9 +271,14 @@ const Students: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {programs.filter(program => program.id !== 'all').map((program) => {
-              const programStudents = students.filter(s => s.program === program.id);
-              const activeStudents = programStudents.filter(s => s.status === 'active');
+            {(programs && Array.isArray(programs) ? programs : []).filter(program => program && program.id !== 'all').map((program) => {
+              if (!program || !program.id || !program.name) {
+                console.warn('Invalid program object:', program);
+                return null;
+              }
+              
+              const programStudents = (students && Array.isArray(students) ? students : []).filter(s => s && s.program === program.id);
+              const activeStudents = programStudents.filter(s => s && s.status === 'active');
               
               // Get appropriate icon for each program
               const getProgramIcon = (programId: string) => {
@@ -236,25 +300,25 @@ const Students: React.FC = () => {
                 <div 
                   key={program.id}
                   className={`bg-white border-2 rounded-lg p-4 hover:shadow-lg transition-all duration-200 cursor-pointer ${
-                    selectedProgram === program.id 
+                    selectedProgram && program.id && selectedProgram === program.id
                       ? 'border-blue-500 bg-blue-50' 
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
-                  onClick={() => setSelectedProgram(program.id)}
+                  onClick={() => program.id && setSelectedProgram(program.id)}
                 >
                   <div className="text-center">
                     <div className="flex justify-center mb-3">
-                      {getProgramIcon(program.id)}
+                      {getProgramIcon && program.id ? getProgramIcon(program.id) : <Users className="w-8 h-8 text-gray-600" />}
                     </div>
                     <div className="text-2xl font-bold text-gray-900 mb-1">
                       {programStudents.length}
                     </div>
-                    <div className="text-sm text-gray-600 mb-2 font-medium">{program.name}</div>
+                    <div className="text-sm text-gray-600 mb-2 font-medium">{program.name || 'Unknown Program'}</div>
                     <div className="text-xs text-green-600 font-medium mb-2">
                       {activeStudents.length} active
                     </div>
                     <div className="text-xs text-blue-600 font-medium">
-                      {selectedProgram === program.id ? 'Selected' : 'Click to filter'}
+                      {selectedProgram && program.id && selectedProgram === program.id ? 'Selected' : 'Click to filter'}
                     </div>
                   </div>
                 </div>
@@ -267,44 +331,81 @@ const Students: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-green-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-green-600">
-              {students.filter(s => s.status === 'active').length}
+              {(students && Array.isArray(students) ? students : []).filter(s => s && s.status === 'active').length}
             </div>
             <div className="text-sm text-green-700">Active Students</div>
           </div>
           <div className="bg-red-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-red-600">
-              {students.filter(s => s.status === 'inactive').length}
+              {(students && Array.isArray(students) ? students : []).filter(s => s && s.status === 'inactive').length}
             </div>
             <div className="text-sm text-red-700">Inactive Students</div>
           </div>
           <div className="bg-blue-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">{students.length}</div>
+            <div className="text-2xl font-bold text-blue-600">{(students && Array.isArray(students) ? students : []).length}</div>
             <div className="text-sm text-blue-700">Total Students</div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStudents.map((student) => (
-            <StudentCard
-              key={student.id}
-              student={student}
-              onView={() => handleViewStudent(student)}
-              onEdit={() => handleEditStudent(student)}
-              onStatusToggle={handleStatusToggle}
-            />
-          ))}
+          {(filteredStudents && Array.isArray(filteredStudents) ? filteredStudents : []).map((student) => {
+            if (!StudentCard) {
+              console.error('StudentCard component is not available');
+              return null;
+            }
+            if (!student || !student.id || !student.name) {
+              console.warn('Invalid student object:', student);
+              return null;
+            }
+            return (
+              <StudentCard
+                key={student.id}
+                student={student}
+                onView={() => handleViewStudent(student)}
+                onEdit={() => handleEditStudent(student)}
+                onDelete={handleDeleteStudent}
+                onStatusToggle={handleStatusToggle}
+              />
+            );
+          })}
         </div>
       </div>
 
-      {isModalOpen && selectedStudent && (
+      {isModalOpen && selectedStudent && StudentModal && (
         <StudentModal
           student={selectedStudent}
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
+          onDelete={handleDeleteStudent}
         />
       )}
     </div>
   );
+  } catch (error) {
+    console.error('Error rendering Students component:', error);
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Students</h1>
+            <p className="text-gray-600 mt-2">Error rendering component</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="text-center py-12">
+            <div className="text-red-600 text-lg font-medium mb-2">Error Rendering Students</div>
+            <p className="text-gray-600 mb-4">{error instanceof Error ? error.message : 'Unknown error occurred'}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default Students;

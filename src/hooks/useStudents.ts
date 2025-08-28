@@ -11,7 +11,7 @@ export interface Student {
   status: string
   enrollment_date: string
   notes: string
-  picture_url?: string
+  picture_url?: string | null
   created_at: string
   updated_at: string
 }
@@ -59,7 +59,7 @@ export const useStudents = () => {
       if (error) throw error
       setPrograms(data || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch programs')
+      console.error('Failed to fetch programs:', err)
     }
   }
 
@@ -111,6 +111,13 @@ export const useStudents = () => {
   // Delete student
   const deleteStudent = async (id: number) => {
     try {
+      // First, delete the student's picture if they have one
+      const student = students.find(s => s.id === id)
+      if (student?.picture_url) {
+        await deleteStudentPicture(id)
+      }
+
+      // Delete the student record
       const { error } = await supabase
         .from('students')
         .delete()
@@ -118,7 +125,9 @@ export const useStudents = () => {
 
       if (error) throw error
       
+      // Remove from local state
       setStudents(prev => prev.filter(student => student.id !== id))
+      
       return { success: true }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete student')

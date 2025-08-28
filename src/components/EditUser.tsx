@@ -1,23 +1,36 @@
 import React, { useState } from 'react';
-import { X, Save, User, Mail, Phone, Shield } from 'lucide-react';
+import { X, Save, User, Mail, Phone, Shield, Users } from 'lucide-react';
+import PictureUpload from './PictureUpload';
+import { useUsers } from '../hooks/useUsers';
 
 interface EditUserProps {
   user: any;
   isOpen: boolean;
   onClose: () => void;
+  onUserUpdated?: () => void;
 }
 
-const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose }) => {
+const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdated }) => {
   const [formData, setFormData] = useState({
-    firstName: user.name.split(' ')[0] || '',
-    lastName: user.name.split(' ').slice(1).join(' ') || '',
+    firstName: user.first_name || user.name?.split(' ')[0] || '',
+    lastName: user.last_name || user.name?.split(' ').slice(1).join(' ') || '',
     email: user.email || '',
     phone: user.phone || '',
-    role: user.role.toLowerCase() || '',
+    role: user.role?.toLowerCase() || '',
     department: user.department || '',
     status: user.status || 'active',
     permissions: user.permissions || []
   });
+
+  const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
+  const [selectedProgram, setSelectedProgram] = useState<number | ''>(user.program_id || '');
+  const [selectedClass, setSelectedClass] = useState<string | ''>(user.class_id || '');
+
+  // Use the users hook
+  const { updateUser, uploadUserPicture, programs, classes, fetchClasses } = useUsers();
+
+  // Get the current picture URL from the user data
+  const currentPictureUrl = user.picture_url || user.avatar;
 
   const roles = [
     { id: 'administrator', name: 'Administrator' },
@@ -72,11 +85,58 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose }) => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Updated user data:', formData);
-    alert('User updated successfully!');
-    onClose();
+    
+    try {
+      // Prepare user data for update
+      const updateData = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone: formData.phone || '',
+        role: formData.role,
+        department: formData.department || '',
+        status: formData.status,
+        permissions: formData.permissions,
+        program_id: selectedProgram || undefined,
+        class_id: selectedClass || undefined
+      };
+
+      // Update user in Supabase
+      const result = await updateUser(user.id, updateData);
+      
+      if (result.success) {
+        console.log('User updated successfully:', result.data);
+        
+        // Upload picture if one was selected
+        if (selectedPicture) {
+          const pictureResult = await uploadUserPicture(user.id, selectedPicture);
+          if (!pictureResult.success) {
+            console.warn('User updated but picture upload failed:', pictureResult.error);
+            alert('User updated successfully, but picture upload failed. You can try again later.');
+          } else {
+            console.log('Picture uploaded successfully:', pictureResult.url);
+            alert('User and profile picture updated successfully!');
+          }
+        } else {
+          alert('User updated successfully!');
+        }
+        
+        // Notify parent component that user was updated BEFORE closing
+        if (onUserUpdated) {
+          onUserUpdated();
+        }
+        
+        // Close the modal after refreshing data
+        onClose();
+      } else {
+        alert(`Failed to update user: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert('Failed to update user. Please try again.');
+    }
   };
 
   return (
@@ -150,6 +210,19 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose }) => {
               </div>
             </div>
 
+            {/* Profile Picture */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                <User className="w-5 h-5" />
+                <span>Profile Picture</span>
+              </h3>
+              <PictureUpload
+                currentPicture={currentPictureUrl}
+                onPictureChange={setSelectedPicture}
+                size="md"
+              />
+            </div>
+
             {/* Role and Department */}
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
@@ -206,6 +279,59 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose }) => {
                 </div>
               </div>
             </div>
+
+            {/* Program and Class Assignment */}
+            {(formData.role === 'teacher' || formData.role === 'therapist' || formData.role === 'coordinator') && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                  <Users className="w-5 h-5" />
+                  <span>Program & Class Assignment</span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Primary Program</label>
+                    <select
+                      value={selectedProgram}
+                      onChange={(e) => {
+                        const programId = e.target.value ? parseInt(e.target.value) : '';
+                        setSelectedProgram(programId);
+                        setSelectedClass(''); // Reset class when program changes
+                        if (programId) {
+                          fetchClasses(programId);
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select program...</option>
+                      {programs.map((program) => (
+                        <option key={program.id} value={program.id}>
+                          {program.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Primary Class</label>
+                    <select
+                      value={selectedClass}
+                      onChange={(e) => setSelectedClass(e.target.value)}
+                      disabled={!selectedProgram}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select class...</option>
+                      {classes.map((classGroup) => (
+                        <option key={classGroup.id} value={classGroup.id}>
+                          {classGroup.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!selectedProgram && (
+                      <p className="text-xs text-gray-500 mt-1">Select a program first to choose a class</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Permissions */}
             <div>

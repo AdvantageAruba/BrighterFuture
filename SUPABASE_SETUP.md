@@ -7,8 +7,9 @@ This guide explains how to set up Supabase storage to enable student picture upl
 - Access to your Supabase project dashboard
 - Admin privileges for your Supabase project
 
-## Step 1: Create Storage Bucket
+## Step 1: Create Storage Buckets
 
+### Student Pictures Bucket
 1. Go to your Supabase project dashboard
 2. Navigate to **Storage** in the left sidebar
 3. Click **Create a new bucket**
@@ -19,38 +20,61 @@ This guide explains how to set up Supabase storage to enable student picture upl
    - **Allowed MIME types**: `image/*`
 5. Click **Create bucket**
 
+### User Pictures Bucket (Optional)
+1. Create another bucket for user profile pictures:
+   - **Name**: `user-pictures`
+   - **Public bucket**: ✅ Check this option
+   - **File size limit**: 5MB (or your preferred limit)
+   - **Allowed MIME types**: `image/*`
+2. Click **Create bucket**
+
 ## Step 2: Configure Storage Policies
 
-After creating the bucket, you need to set up storage policies to control access:
+After creating the buckets, you need to set up storage policies to control access:
 
-### Policy 1: Public Read Access
+### Student Pictures Policies
 ```sql
+-- Public Read Access
 CREATE POLICY "Student pictures are publicly accessible" ON storage.objects
 FOR SELECT USING (bucket_id = 'student-pictures');
-```
 
-### Policy 2: Authenticated User Upload
-```sql
+-- Authenticated User Upload
 CREATE POLICY "Users can upload student pictures" ON storage.objects
 FOR INSERT WITH CHECK (bucket_id = 'student-pictures');
-```
 
-### Policy 3: Authenticated User Update
-```sql
+-- Authenticated User Update
 CREATE POLICY "Users can update student pictures" ON storage.objects
 FOR UPDATE USING (bucket_id = 'student-pictures');
-```
 
-### Policy 4: Authenticated User Delete
-```sql
+-- Authenticated User Delete
 CREATE POLICY "Users can delete student pictures" ON storage.objects
 FOR DELETE USING (bucket_id = 'student-pictures');
 ```
 
-## Step 3: Run Database Migration
+### User Pictures Policies (Optional)
+```sql
+-- Public Read Access
+CREATE POLICY "User pictures are publicly accessible" ON storage.objects
+FOR SELECT USING (bucket_id = 'user-pictures');
+
+-- Authenticated User Upload
+CREATE POLICY "Users can upload user pictures" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'user-pictures');
+
+-- Authenticated User Update
+CREATE POLICY "Users can update user pictures" ON storage.objects
+FOR UPDATE USING (bucket_id = 'user-pictures');
+
+-- Authenticated User Delete
+CREATE POLICY "Users can delete user pictures" ON storage.objects
+FOR DELETE USING (bucket_id = 'user-pictures');
+```
+
+## Step 3: Run Database Migrations
 
 Execute the following SQL in your Supabase SQL editor:
 
+### Students Table Migration
 ```sql
 -- Add picture_url column to students table
 ALTER TABLE students 
@@ -60,21 +84,44 @@ ADD COLUMN picture_url TEXT;
 COMMENT ON COLUMN students.picture_url IS 'URL to the student profile picture stored in Supabase Storage';
 ```
 
+### Users Table Creation and Migration
+```sql
+-- Create users table (run this first if you don't have a users table)
+-- See create_users_table.sql for the complete table creation script
+
+-- Or if you already have a users table, just add the picture_url column:
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS picture_url TEXT;
+
+-- Add comment to document the field
+COMMENT ON COLUMN users.picture_url IS 'URL to the user profile picture stored in Supabase Storage';
+```
+
 ## Step 4: Verify Setup
 
 1. Check that the `student-pictures` bucket exists in Storage
-2. Verify that the storage policies are active
-3. Confirm that the `picture_url` column was added to the `students` table
+2. Check that the `user-pictures` bucket exists in Storage (if using user pictures)
+3. Verify that the storage policies are active
+4. Confirm that the `picture_url` column was added to the `students` table
+5. Confirm that the `users` table exists and has the `picture_url` column
 
 ## Features Enabled
 
 After completing this setup, the application will support:
 
+### Student Pictures
 - ✅ Uploading student profile pictures during student creation
 - ✅ Updating student profile pictures when editing student information
 - ✅ Automatic picture deletion when removing pictures
 - ✅ Picture preview in forms
 - ✅ Fallback to placeholder images when no picture is uploaded
+- ✅ File type validation (images only)
+- ✅ File size validation (5MB limit)
+
+### User Pictures (Optional)
+- ✅ Uploading user profile pictures during user creation
+- ✅ Updating user profile pictures when editing user information
+- ✅ Picture preview in user forms
 - ✅ File type validation (images only)
 - ✅ File size validation (5MB limit)
 
@@ -93,6 +140,9 @@ To test the setup:
 1. Create a new student with a picture
 2. Edit an existing student and upload a picture
 3. Verify pictures display correctly in the student list and cards
+4. Create a new user with a profile picture
+5. Edit an existing user and upload a profile picture
+6. Verify user pictures display correctly in user management
 
 ## Security Considerations
 

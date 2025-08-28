@@ -7,6 +7,7 @@ interface StudentModalProps {
   student: any;
   isOpen: boolean;
   onClose: () => void;
+  onDelete?: (studentId: number) => void;
 }
 
 const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose }) => {

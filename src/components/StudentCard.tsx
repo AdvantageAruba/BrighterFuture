@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, Edit, MoreVertical, FileText, MessageSquare, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Eye, Edit, MoreVertical, FileText, MessageSquare, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 
 interface StudentCardProps {
   student: {
@@ -16,10 +16,11 @@ interface StudentCardProps {
   };
   onView: () => void;
   onEdit: () => void;
+  onDelete?: (studentId: number) => void;
   onStatusToggle?: (studentId: number, newStatus: string) => void;
 }
 
-const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onStatusToggle }) => {
+const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onDelete, onStatusToggle }) => {
   const getStatusColor = (status: string) => {
     return status === 'active' 
       ? 'bg-green-100 text-green-800' 
@@ -148,6 +149,20 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onSt
           <Edit className="w-4 h-4" />
           <span>Edit</span>
         </button>
+        {onDelete && (
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (window.confirm(`Are you sure you want to delete ${student.name}? This action cannot be undone.`)) {
+                onDelete(student.id);
+              }
+            }}
+            className="px-3 py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg transition-colors duration-200"
+            title="Delete student"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {student.status === 'inactive' && (

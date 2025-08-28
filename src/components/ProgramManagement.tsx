@@ -1,11 +1,58 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Users, Calendar, BookOpen, Settings, Eye, BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit, Eye, GraduationCap } from 'lucide-react';
 import AddProgram from './AddProgram';
 import EditProgram from './EditProgram';
 import ProgramDetails from './ProgramDetails';
+import AddClass from './AddClass';
+import EditClass from './EditClass';
+import { Class, Program, Teacher } from '../hooks/useClasses';
 
-const ProgramManagement: React.FC = () => {
-  const [programs] = useState([
+interface ProgramManagementProps {
+  classesData: {
+    classes: Class[];
+    programs: Program[];
+    teachers: Teacher[];
+    loading: boolean;
+    error: string | null;
+    getClassesByProgram: (programId: number) => Class[];
+    getClassCountByProgram: (programId: number) => number;
+    getTeacherName: (teacherId: number | null) => string;
+    addClass: (classData: Omit<Class, 'created_at' | 'updated_at'>) => Promise<{ success: boolean; data?: Class; error?: string }>;
+    updateClass: (id: string, updates: Partial<Class>) => Promise<{ success: boolean; data?: Class; error?: string }>;
+    deleteClass: (id: string) => Promise<{ success: boolean; error?: string }>;
+    refreshClasses: () => void;
+    refreshPrograms: () => Promise<void>;
+    refreshTeachers: () => Promise<void>;
+  };
+}
+
+const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) => {
+  // Component state
+  const [selectedProgram, setSelectedProgram] = useState<any>(null);
+  const [isAddProgramOpen, setIsAddProgramOpen] = useState(false);
+  const [isEditProgramOpen, setIsEditProgramOpen] = useState(false);
+  const [isProgramDetailsOpen, setIsProgramDetailsOpen] = useState(false);
+  const [editingProgram, setEditingProgram] = useState<any>(null);
+  const [isAddClassOpen, setIsAddClassOpen] = useState(false);
+  const [isEditClassOpen, setIsEditClassOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<any>(null);
+  const [selectedProgramForClass, setSelectedProgramForClass] = useState<number | null>(null);
+
+  // Destructure the data and functions from props
+  const { 
+    classes, 
+    programs,
+    teachers,
+    getClassesByProgram, 
+    getClassCountByProgram, 
+    getTeacherName, 
+    addClass, 
+    updateClass, 
+    deleteClass 
+  } = classesData;
+
+  // Static programs data
+  const [staticPrograms] = useState([
     {
       id: 1,
       name: 'Brighter Future Academy',
@@ -108,11 +155,48 @@ const ProgramManagement: React.FC = () => {
     }
   ]);
 
-  const [selectedProgram, setSelectedProgram] = useState(null);
-  const [isAddProgramOpen, setIsAddProgramOpen] = useState(false);
-  const [isEditProgramOpen, setIsEditProgramOpen] = useState(false);
-  const [isProgramDetailsOpen, setIsProgramDetailsOpen] = useState(false);
-  const [editingProgram, setEditingProgram] = useState(null);
+  // Event handlers
+  const handleAddClassClick = (programId: number) => {
+    setSelectedProgramForClass(programId);
+    setIsAddClassOpen(true);
+  };
+
+  const handleViewProgram = (program: any) => {
+    setSelectedProgram(program);
+    setIsProgramDetailsOpen(true);
+  };
+
+  const handleEditProgram = (program: any) => {
+    setEditingProgram(program);
+    setIsEditProgramOpen(true);
+  };
+
+  const handleEditClass = (classData: any) => {
+    setEditingClass(classData);
+    setIsEditClassOpen(true);
+  };
+
+  const handleCloseClassModal = () => {
+    setIsAddClassOpen(false);
+    setIsEditClassOpen(false);
+    setEditingClass(null);
+    setSelectedProgramForClass(null);
+  };
+
+  // Utility functions
+  const getClassesByProgramLocal = (programId: number) => {
+    return classes.filter((cls: Class) => cls.program_id === programId);
+  };
+
+  const getClassCountByProgramLocal = (programId: number) => {
+    return classes.filter((cls: Class) => cls.program_id === programId).length;
+  };
+
+  const getTeacherNameLocal = (teacherId: number | null | undefined) => {
+    if (!teacherId) return 'No teacher assigned';
+    const teacher = teachers.find((t: Teacher) => t.id === teacherId);
+    return teacher ? `${teacher.first_name} ${teacher.last_name}` : 'Unknown Teacher';
+  };
 
   const getCapacityColor = (current: number, capacity: number) => {
     const percentage = (current / capacity) * 100;
@@ -144,96 +228,77 @@ const ProgramManagement: React.FC = () => {
       case 'Early Intervention': return 'bg-green-100 text-green-800';
       case 'Therapy Services': return 'bg-purple-100 text-purple-800';
       case 'Consultation': return 'bg-orange-100 text-orange-800';
-      case 'Seasonal Program': return 'bg-indigo-100 text-indigo-800';
+      case 'Seasonal Program': return 'bg-pink-100 text-pink-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleViewProgram = (program: any) => {
-    setSelectedProgram(program);
-    setIsProgramDetailsOpen(true);
-  };
-
-  const handleEditProgram = (program: any) => {
-    setEditingProgram(program);
-    setIsEditProgramOpen(true);
-  };
-
-  const handleAddProgram = () => {
-    setIsAddProgramOpen(true);
-  };
-
-  const totalStudents = programs.reduce((sum, program) => sum + program.students, 0);
-  const totalCapacity = programs.reduce((sum, program) => sum + program.capacity, 0);
-  const activePrograms = programs.filter(p => p.status === 'active').length;
-  const totalWaitingList = programs.reduce((sum, program) => sum + program.waitingList, 0);
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Program Management</h1>
-          <p className="text-gray-600 mt-2">Manage educational programs, enrollment, and program performance</p>
+          <p className="text-gray-600 mt-2">Manage educational programs and their classes</p>
         </div>
-        <button 
-          onClick={handleAddProgram}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Program</span>
-        </button>
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={() => setIsAddProgramOpen(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add Program</span>
+          </button>
+        </div>
       </div>
 
-      {/* Program Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Programs</p>
-              <p className="text-2xl font-bold text-gray-900">{programs.length}</p>
-              <p className="text-sm text-green-600 mt-1">{activePrograms} active</p>
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <GraduationCap className="w-6 h-6 text-blue-600" />
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Enrollment</p>
-              <p className="text-2xl font-bold text-gray-900">{totalStudents}</p>
-              <p className="text-sm text-gray-600 mt-1">of {totalCapacity} capacity</p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-green-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Programs</p>
+              <p className="text-2xl font-bold text-gray-900">{staticPrograms.length}</p>
             </div>
           </div>
         </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Waiting List</p>
-              <p className="text-2xl font-bold text-gray-900">{totalWaitingList}</p>
-              <p className="text-sm text-orange-600 mt-1">across all programs</p>
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <GraduationCap className="w-6 h-6 text-green-600" />
             </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <AlertCircle className="w-6 h-6 text-orange-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Classes</p>
+              <p className="text-2xl font-bold text-gray-900">{classes.length}</p>
             </div>
           </div>
         </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Avg. Satisfaction</p>
-              <p className="text-2xl font-bold text-gray-900">4.7</p>
-              <p className="text-sm text-green-600 mt-1">out of 5.0</p>
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <GraduationCap className="w-6 h-6 text-purple-600" />
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Active Programs</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {staticPrograms.filter(p => p.status === 'active').length}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <GraduationCap className="w-6 h-6 text-orange-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Students</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {staticPrograms.reduce((sum, p) => sum + p.students, 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -241,93 +306,109 @@ const ProgramManagement: React.FC = () => {
 
       {/* Programs Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {programs.map((program) => (
-          <div key={program.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <BookOpen className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{program.name}</h3>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getProgramTypeColor(program.type)}`}>
-                      {program.type}
-                    </span>
+        {staticPrograms.map((program) => (
+          <div key={program.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
+            {/* Program Header */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{program.name}</h3>
+                  <p className="text-gray-600 text-sm mb-3">{program.description}</p>
+                  <div className="flex items-center space-x-4 text-sm">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(program.status)}`}>
                       {program.status}
                     </span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getProgramTypeColor(program.type)}`}>
+                      {program.type}
+                    </span>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={() => handleViewProgram(program)}
-                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => handleEditProgram(program)}
-                  className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-200"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-600 mb-4 line-clamp-2">{program.description}</p>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <p className="text-xs text-gray-500">Coordinator</p>
-                <p className="text-sm font-medium text-gray-900">{program.coordinator}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Age Range</p>
-                <p className="text-sm font-medium text-gray-900">{program.ageRange}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Staff Count</p>
-                <p className="text-sm font-medium text-gray-900">{program.staffCount} members</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Waiting List</p>
-                <p className="text-sm font-medium text-gray-900">{program.waitingList} students</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Enrollment</span>
-                <span className={`text-sm font-medium ${getCapacityColor(program.students, program.capacity)}`}>
-                  {program.students} / {program.capacity}
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(program.students, program.capacity)}`}
-                  style={{ width: `${(program.students / program.capacity) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-1 text-sm text-gray-600">
-                  <BarChart3 className="w-4 h-4" />
-                  <span>{program.graduationRate}% success</span>
-                </div>
-                <div className="flex items-center space-x-1 text-sm text-gray-600">
-                  <TrendingUp className="w-4 h-4" />
-                  <span>{program.satisfactionScore}/5.0</span>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleViewProgram(program)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                    title="View Details"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => handleEditProgram(program)}
+                    className="p-2 text-gray-400 hover:text-blue-600 transition-colors duration-200"
+                    title="Edit Program"
+                  >
+                    <Edit className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
-              <div className="text-xs text-gray-500">
-                Since {new Date(program.startDate).getFullYear()}
+            </div>
+
+            {/* Program Stats */}
+            <div className="p-6 bg-gray-50">
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Students</p>
+                  <p className={`text-lg font-semibold ${getCapacityColor(program.students, program.capacity)}`}>
+                    {program.students}/{program.capacity}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Staff</p>
+                  <p className="text-lg font-semibold text-gray-900">{program.staffCount}</p>
+                </div>
+              </div>
+              
+              {/* Capacity Progress Bar */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-1">
+                  <span>Capacity</span>
+                  <span>{Math.round((program.students / program.capacity) * 100)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full ${getProgressBarColor(program.students, program.capacity)}`}
+                    style={{ width: `${Math.min((program.students / program.capacity) * 100, 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Classes Section */}
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-gray-900">Classes ({getClassCountByProgramLocal(program.id)})</h4>
+                  <button
+                    onClick={() => handleAddClassClick(program.id)}
+                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center space-x-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Class</span>
+                  </button>
+                </div>
+                
+                {getClassesByProgramLocal(program.id).length > 0 ? (
+                  <div className="space-y-2">
+                    {getClassesByProgramLocal(program.id).map((cls) => (
+                      <div key={cls.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{cls.name}</p>
+                          <p className="text-sm text-gray-600">
+                            {cls.max_students} students • {cls.status} • {getTeacherNameLocal(cls.teacher_id)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleEditClass(cls)}
+                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors duration-200"
+                          title="Edit Class"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    No classes yet. Click "Add Class" to get started.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -344,21 +425,44 @@ const ProgramManagement: React.FC = () => {
 
       {isEditProgramOpen && editingProgram && (
         <EditProgram
-          program={editingProgram}
           isOpen={isEditProgramOpen}
           onClose={() => setIsEditProgramOpen(false)}
+          program={editingProgram}
         />
       )}
 
       {isProgramDetailsOpen && selectedProgram && (
         <ProgramDetails
-          program={selectedProgram}
           isOpen={isProgramDetailsOpen}
           onClose={() => setIsProgramDetailsOpen(false)}
+          program={selectedProgram}
+        />
+      )}
+
+      {isAddClassOpen && selectedProgramForClass && (
+        <AddClass
+          isOpen={isAddClassOpen}
+          onClose={handleCloseClassModal}
+          programId={selectedProgramForClass}
+          programs={programs}
+          teachers={teachers}
+          addClass={addClass}
+        />
+      )}
+
+      {isEditClassOpen && editingClass && (
+        <EditClass
+          isOpen={isEditClassOpen}
+          onClose={handleCloseClassModal}
+          classData={editingClass}
+          programs={programs}
+          teachers={teachers}
+          updateClass={updateClass}
+          deleteClass={deleteClass}
         />
       )}
     </div>
   );
 };
 
-export default ProgramManagement;
+export default React.memo(ProgramManagement);

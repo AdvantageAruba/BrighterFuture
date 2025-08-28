@@ -3,6 +3,7 @@ import { Plus, Search, Edit, Trash2, Mail, Phone, Shield, Eye, Link, Copy, X, Sa
 import AddUser from './AddUser';
 import UserProfile from './UserProfile';
 import EditUser from './EditUser';
+import { useUsers } from '../hooks/useUsers';
 
 const UserManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -12,47 +13,27 @@ const UserManagement: React.FC = () => {
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
-  const users = [
-    {
-      id: 1,
-      name: 'Dr. Sarah Johnson',
-      email: 'sarah.johnson@brighterfuture.edu',
-      role: 'Administrator',
-      phone: '(555) 123-4567',
-      status: 'active',
-      avatar: 'https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop',
-      department: 'Administration',
-      joinDate: '2020-01-15',
-      lastLogin: '2024-01-15 09:30 AM',
-      permissions: ['all']
-    },
-    {
-      id: 2,
-      name: 'Ms. Emily Smith',
-      email: 'emily.smith@brighterfuture.edu',
-      role: 'Teacher',
-      phone: '(555) 234-5678',
-      status: 'active',
-      avatar: 'https://images.pexels.com/photos/3769021/pexels-photo-3769021.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop',
-      department: 'Education',
-      joinDate: '2021-03-10',
-      lastLogin: '2024-01-15 08:45 AM',
-      permissions: ['students', 'calendar', 'notes']
-    },
-    {
-      id: 3,
-      name: 'Dr. Michael Wilson',
-      email: 'michael.wilson@brighterfuture.edu',
-      role: 'Therapist',
-      phone: '(555) 345-6789',
-      status: 'active',
-      avatar: 'https://images.pexels.com/photos/5327921/pexels-photo-5327921.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop',
-      department: 'Therapy Services',
-      joinDate: '2019-08-22',
-      lastLogin: '2024-01-14 04:20 PM',
-      permissions: ['students', 'therapy', 'assessments']
-    }
-  ];
+  // Use real data from Supabase
+  const { users, loading, error, deleteUser, refreshUsers } = useUsers();
+
+  // Transform users data for the UI
+  const transformedUsers = users.map(user => ({
+    id: user.id,
+    name: `${user.first_name} ${user.last_name}`,
+    email: user.email,
+    role: user.role,
+    phone: user.phone || 'N/A',
+    status: user.status,
+    avatar: user.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop`,
+    department: user.department || 'N/A',
+    program: user.program_id ? getProgramName(user.program_id) : 'N/A',
+    class: user.class_id ? getClassName(user.class_id) : 'N/A',
+    joinDate: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : 'Unknown',
+    lastLogin: 'N/A', // Will be updated when login tracking is implemented
+    permissions: user.permissions || [],
+    // Keep original user data for editing
+    originalUser: user
+  }));
 
   const getRoleColor = (role: string) => {
     switch (role.toLowerCase()) {
@@ -73,7 +54,7 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const filteredUsers = users.filter(user =>
+  const filteredUsers = transformedUsers.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -84,14 +65,25 @@ const UserManagement: React.FC = () => {
   };
 
   const handleEditUser = (user: any) => {
-    setEditingUser(user);
+    // Use the original user data for editing
+    setEditingUser(user.originalUser || user);
     setIsEditUserOpen(true);
   };
 
-  const handleDeleteUser = (user: any) => {
+  const handleDeleteUser = async (user: any) => {
     if (confirm(`Are you sure you want to delete ${user.name}?`)) {
-      console.log('Deleting user:', user);
-      alert('User deleted successfully!');
+      try {
+        const result = await deleteUser(user.id);
+        if (result.success) {
+          alert('User deleted successfully!');
+          refreshUsers(); // Refresh the list
+        } else {
+          alert(`Failed to delete user: ${result.error}`);
+        }
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Failed to delete user. Please try again.');
+      }
     }
   };
 
@@ -99,91 +91,123 @@ const UserManagement: React.FC = () => {
     setIsAddUserOpen(true);
   };
 
+  const handleUserAdded = () => {
+    refreshUsers(); // Refresh the list when a new user is added
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-gray-500">Loading users...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-red-500">Error loading users: {error}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">User Management</h3>
-        <button 
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
+          <p className="text-gray-600">Manage system users and their permissions</p>
+        </div>
+        <button
           onClick={handleAddUser}
           className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-5 h-5" />
           <span>Add User</span>
         </button>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-        <input
-          type="text"
-          placeholder="Search users..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        />
+      {/* Search and Filters */}
+      <div className="flex items-center space-x-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Search users by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
       </div>
 
+      {/* Users List */}
       <div className="space-y-4">
-        {filteredUsers.map((user) => (
-          <div key={user.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow duration-200">
-            <div className="flex items-center justify-between">
-              <div 
-                className="flex items-center space-x-4 cursor-pointer flex-1"
-                onClick={() => handleViewUser(user)}
-              >
-                <img
-                  src={user.avatar}
-                  alt={user.name}
-                  className="w-12 h-12 rounded-full object-cover"
-                />
-                <div>
-                  <h4 className="font-medium text-gray-900">{user.name}</h4>
-                  <div className="flex items-center space-x-4 mt-1">
-                    <div className="flex items-center space-x-1 text-sm text-gray-600">
-                      <Mail className="w-4 h-4" />
-                      <span>{user.email}</span>
+        {filteredUsers.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            {searchTerm ? 'No users found matching your search.' : 'No users found.'}
+          </div>
+        ) : (
+          filteredUsers.map((user) => (
+            <div key={user.id} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">{user.name}</h3>
+                    <p className="text-gray-600">{user.email}</p>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
+                        {user.role}
+                      </span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(user.status)}`}>
+                        {user.status}
+                      </span>
                     </div>
-                    <div className="flex items-center space-x-1 text-sm text-gray-600">
-                      <Phone className="w-4 h-4" />
-                      <span>{user.phone}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
-                      {user.role}
-                    </span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(user.status)}`}>
-                      {user.status}
-                    </span>
+                    {(user.program !== 'N/A' || user.class !== 'N/A') && (
+                      <div className="flex items-center space-x-2 mt-2 text-xs text-gray-500">
+                        {user.program !== 'N/A' && (
+                          <span>📚 {user.program}</span>
+                        )}
+                        {user.class !== 'N/A' && (
+                          <span>👥 {user.class}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={() => handleViewUser(user)}
-                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                  title="View Profile"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => handleEditUser(user)}
-                  className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-200"
-                  title="Edit User"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => handleDeleteUser(user)}
-                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                  title="Delete User"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => handleViewUser(user)}
+                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                    title="View Profile"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleEditUser(user)}
+                    className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-200"
+                    title="Edit User"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteUser(user)}
+                    className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                    title="Delete User"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Add User Modal */}
@@ -191,6 +215,7 @@ const UserManagement: React.FC = () => {
         <AddUser
           isOpen={isAddUserOpen}
           onClose={() => setIsAddUserOpen(false)}
+          onUserAdded={handleUserAdded}
         />
       )}
 
@@ -213,6 +238,7 @@ const UserManagement: React.FC = () => {
           user={editingUser}
           isOpen={isEditUserOpen}
           onClose={() => setIsEditUserOpen(false)}
+          onUserUpdated={handleUserAdded}
         />
       )}
     </div>

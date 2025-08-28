@@ -11,6 +11,7 @@ import ProgramManagement from './components/ProgramManagement';
 import Settings from './components/Settings';
 import UserProfile from './components/UserProfile';
 import Navigation from './components/Navigation';
+import { useClasses } from './hooks/useClasses';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -20,7 +21,10 @@ function App() {
     avatar: 'https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop'
   });
 
-  const renderContent = () => {
+  // Move useClasses to App level so it persists across tab switches
+  const classesData = useClasses();
+
+  const renderContent = React.useMemo(() => {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard setActiveTab={setActiveTab} />;
@@ -37,7 +41,7 @@ function App() {
       case 'calendar':
         return <Calendar />;
       case 'programs':
-        return <ProgramManagement />;
+        return <ProgramManagement classesData={classesData} />;
       case 'settings':
         return <Settings />;
       case 'profile':
@@ -45,7 +49,7 @@ function App() {
       default:
         return <Dashboard setActiveTab={setActiveTab} />;
     }
-  };
+  }, [activeTab, user, classesData]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -57,7 +61,7 @@ function App() {
       
       <main className="ml-64 transition-all duration-300">
         <div className="p-8">
-          {renderContent()}
+          {renderContent}
         </div>
       </main>
     </div>

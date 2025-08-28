@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { X, Save, User, Mail, Phone, Shield, Link, Copy, Check } from 'lucide-react';
+import { X, Save, User, Mail, Phone, Shield, Link, Copy, Check, Users } from 'lucide-react';
+import PictureUpload from './PictureUpload';
+import { useUsers } from '../hooks/useUsers';
 
 interface AddUserProps {
   isOpen: boolean;
   onClose: () => void;
+  onUserAdded?: () => void;
 }
 
-const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose }) => {
+const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -14,12 +17,19 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose }) => {
     phone: '',
     role: '',
     department: '',
-    permissions: [] as string[],
-    sendInvite: true
+    sendInvite: false,
+    permissions: [] as string[]
   });
+
+  const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
+  const [selectedProgram, setSelectedProgram] = useState<number | ''>('');
+  const [selectedClass, setSelectedClass] = useState<string | ''>('');
 
   const [inviteLink, setInviteLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Use the users hook
+  const { addUser, uploadUserPicture, programs, classes, fetchClasses } = useUsers();
 
   const roles = [
     { id: 'administrator', name: 'Administrator' },
@@ -81,14 +91,58 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose }) => {
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newInviteLink = generateInviteLink();
-    console.log('New user data:', formData);
-    console.log('Invite link generated:', newInviteLink);
-    
-    alert(`User created successfully! ${formData.sendInvite ? 'Invite link generated.' : ''}`);
+    try {
+      // Prepare user data for Supabase
+      const userData = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone: formData.phone || '',
+        role: formData.role,
+        department: formData.department || '',
+        status: 'active',
+        permissions: formData.permissions,
+        program_id: selectedProgram || undefined,
+        class_id: selectedClass || undefined
+      };
+
+      // Save user to Supabase
+      const result = await addUser(userData);
+      
+      if (result.success) {
+        console.log('User added successfully:', result.data);
+        
+        // Upload picture if one was selected
+        if (selectedPicture && result.data) {
+          const pictureResult = await uploadUserPicture(result.data.id, selectedPicture);
+          if (!pictureResult.success) {
+            console.warn('User created but picture upload failed:', pictureResult.error);
+            alert('User created successfully, but picture upload failed. You can add a picture later.');
+          } else {
+            console.log('Picture uploaded successfully:', pictureResult.url);
+          }
+        }
+        
+        const newInviteLink = generateInviteLink();
+        alert(`User created successfully! ${formData.sendInvite ? 'Invite link generated.' : ''} ${selectedPicture ? 'Profile picture uploaded.' : ''}`);
+        
+        // Close the modal after successful creation
+        onClose();
+        
+        // Notify parent component that user was added
+        if (onUserAdded) {
+          onUserAdded();
+        }
+      } else {
+        alert(`Failed to create user: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert('Failed to create user. Please try again.');
+    }
   };
 
   return (
@@ -141,7 +195,7 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
                   <input
-                    type="email"
+                    type="text"
                     name="email"
                     value={formData.email}
                     onChange={handleInputChange}
@@ -160,6 +214,18 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose }) => {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Profile Picture */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                <User className="w-5 h-5" />
+                <span>Profile Picture</span>
+              </h3>
+              <PictureUpload
+                onPictureChange={setSelectedPicture}
+                size="md"
+              />
             </div>
 
             {/* Role and Department */}
@@ -204,6 +270,59 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose }) => {
                 </div>
               </div>
             </div>
+
+            {/* Program and Class Assignment */}
+            {(formData.role === 'teacher' || formData.role === 'therapist' || formData.role === 'coordinator') && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                  <Users className="w-5 h-5" />
+                  <span>Program & Class Assignment</span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Primary Program</label>
+                    <select
+                      value={selectedProgram}
+                      onChange={(e) => {
+                        const programId = e.target.value ? parseInt(e.target.value) : '';
+                        setSelectedProgram(programId);
+                        setSelectedClass(''); // Reset class when program changes
+                        if (programId) {
+                          fetchClasses(programId);
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select program...</option>
+                      {programs.map((program) => (
+                        <option key={program.id} value={program.id}>
+                          {program.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Primary Class</label>
+                    <select
+                      value={selectedClass}
+                      onChange={(e) => setSelectedClass(e.target.value)}
+                      disabled={!selectedProgram}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select class...</option>
+                      {classes.map((classGroup) => (
+                        <option key={classGroup.id} value={classGroup.id}>
+                          {classGroup.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!selectedProgram && (
+                      <p className="text-xs text-gray-500 mt-1">Select a program first to choose a class</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Permissions */}
             <div>
