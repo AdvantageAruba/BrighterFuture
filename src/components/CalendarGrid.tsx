@@ -101,7 +101,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         <div className="grid grid-cols-7 gap-0">
           {days.map((day, index) => {
             if (!day) {
-              return <div key={index} className="h-24 border-r border-b border-gray-200"></div>;
+              return <div key={`empty-${index}`} className="h-24 border-r border-b border-gray-200"></div>;
             }
             
             const dateString = formatDateString(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
@@ -110,7 +110,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             
             return (
               <div
-                key={day}
+                key={`${currentDate.getFullYear()}-${currentDate.getMonth()}-${day}-${index}`}
                 className="h-24 border-r border-b border-gray-200 p-1 cursor-pointer hover:bg-gray-50 transition-colors duration-150"
                 onClick={() => onDateSelect(dateString)}
               >
