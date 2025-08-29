@@ -5,14 +5,16 @@ import PictureUpload from './PictureUpload';
 
 interface AddStudentProps {
   onBack: () => void;
+  onStudentAdded?: () => void; // Callback when student is successfully added
 }
 
-const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
+const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     dateOfBirth: '',
     age: '',
+    gender: '',
     program: '',
     classId: '', // Changed from className to classId
     teacher: '',
@@ -99,7 +101,7 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
     
     try {
       // Validate required fields
-      if (!formData.firstName || !formData.lastName || !formData.dateOfBirth || !formData.program) {
+      if (!formData.firstName || !formData.lastName || !formData.dateOfBirth || !formData.gender || !formData.program) {
         alert('Please fill in all required fields');
         setIsSubmitting(false);
         return;
@@ -111,6 +113,7 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
         email: formData.parentEmail || '',
         phone: formData.parentPhone || '',
         date_of_birth: formData.dateOfBirth,
+        gender: formData.gender || '',
         program_id: parseInt(formData.program),
         status: formData.status,
         enrollment_date: new Date().toISOString().split('T')[0],
@@ -143,6 +146,10 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
         }
         
         alert('Student added successfully!');
+        // Call the callback to notify parent component
+        if (onStudentAdded) {
+          onStudentAdded();
+        }
         onBack();
       } else {
         alert(`Failed to add student: ${result.error}`);
@@ -214,19 +221,34 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Age (Calculated)</label>
-                <input
-                  type="number"
-                  name="age"
-                  value={formData.age}
-                  readOnly
-                  min="1"
-                  max="18"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
-                  placeholder="Enter date of birth to calculate age"
-                />
-              </div>
+                             <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-2">Age (Calculated)</label>
+                 <input
+                   type="number"
+                   name="age"
+                   value={formData.age}
+                   readOnly
+                   min="1"
+                   max="18"
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                   placeholder="Enter date of birth to calculate age"
+                 />
+               </div>
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+                 <select
+                   name="gender"
+                   value={formData.gender}
+                   onChange={handleInputChange}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                 >
+                   <option value="">Select gender...</option>
+                   <option value="male">Male</option>
+                   <option value="female">Female</option>
+                   <option value="other">Other</option>
+                   <option value="prefer-not-to-say">Prefer not to say</option>
+                 </select>
+               </div>
             </div>
           </div>
 

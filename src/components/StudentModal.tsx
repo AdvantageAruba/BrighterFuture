@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, FileText, MessageSquare, Calendar, User, Phone, Mail, CheckCircle, XCircle, Clock, AlertTriangle, Edit, Trash2, Eye } from 'lucide-react';
 import AddAttendance from './AddAttendance';
 import AddDailyNote from './AddDailyNote';
+import { useAttendance } from '../hooks/useAttendance';
 
 interface StudentModalProps {
   student: any;
@@ -21,6 +22,18 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
   // New state for managing modals
   const [isEditAttendanceOpen, setIsEditAttendanceOpen] = useState(false);
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
+  
+  const { attendance, loading: attendanceLoading, error: attendanceError, getAttendanceByStudent } = useAttendance();
+  
+  // Get attendance data for this specific student
+  const studentAttendanceData = getAttendanceByStudent(student.id);
+  
+  // Calculate attendance statistics
+  const totalDays = studentAttendanceData.length;
+  const presentDays = studentAttendanceData.filter(r => r.status === 'present').length;
+  const absentDays = studentAttendanceData.filter(r => r.status === 'absent').length;
+  const lateDays = studentAttendanceData.filter(r => r.status === 'late').length;
+  const attendanceRate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
 
   const handleBackToTabs = () => {
     setDetailView(null);
@@ -62,15 +75,7 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
     avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`
   };
 
-  const attendanceData = [
-    { date: '2024-01-15', status: 'present', checkIn: '08:30 AM', checkOut: '03:00 PM' },
-    { date: '2024-01-14', status: 'present', checkIn: '08:25 AM', checkOut: '03:05 PM' },
-    { date: '2024-01-13', status: 'late', checkIn: '09:15 AM', checkOut: '03:00 PM' },
-    { date: '2024-01-12', status: 'absent', checkIn: null, checkOut: null },
-    { date: '2024-01-11', status: 'present', checkIn: '08:35 AM', checkOut: '02:58 PM' },
-    { date: '2024-01-10', status: 'present', checkIn: '08:28 AM', checkOut: '03:02 PM' },
-    { date: '2024-01-09', status: 'present', checkIn: '08:32 AM', checkOut: '03:00 PM' }
-  ];
+  // Using real attendance data from useAttendance hook instead of hardcoded data
 
   const assessmentData = [
     {
@@ -402,25 +407,25 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-medium text-gray-900">Recent Attendance</h4>
-              <div className="text-sm text-gray-600">
-                Attendance Rate: <span className="font-medium text-green-600">85%</span>
-              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Attendance Rate: <span className="font-medium text-green-600">{attendanceRate}%</span>
+              </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-green-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-green-600">{attendanceData.filter(r => r.status === 'present').length}</div>
+                <div className="text-2xl font-bold text-green-600">{presentDays}</div>
                 <div className="text-sm text-green-700">Present Days</div>
               </div>
               <div className="bg-red-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-red-600">{attendanceData.filter(r => r.status === 'absent').length}</div>
+                <div className="text-2xl font-bold text-red-600">{absentDays}</div>
                 <div className="text-sm text-red-700">Absent Days</div>
               </div>
               <div className="bg-orange-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-orange-600">{attendanceData.filter(r => r.status === 'late').length}</div>
+                <div className="text-2xl font-bold text-orange-600">{lateDays}</div>
                 <div className="text-sm text-orange-700">Late Days</div>
               </div>
             </div>
-            {attendanceData.map((record, index) => (
+            {studentAttendanceData.map((record, index) => (
               <div 
                 key={index} 
                 className="flex items-center justify-between p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 hover:shadow-sm transition-all duration-200"
@@ -434,10 +439,10 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
                   <div>
                     <p className="font-medium text-gray-900">{new Date(record.date).toLocaleDateString()}</p>
                     <p className="text-sm text-gray-600">
-                      {record.status === 'present' && record.checkIn && record.checkOut 
-                        ? `${record.checkIn} - ${record.checkOut}` 
-                        : record.status === 'late' && record.checkIn 
-                        ? `Late arrival at ${record.checkIn}`
+                      {record.status === 'present' && record.check_in && record.check_out 
+                        ? `${record.check_in} - ${record.check_out}` 
+                        : record.status === 'late' && record.check_in 
+                        ? `Late arrival at ${record.check_in}`
                         : record.status === 'absent' 
                         ? 'Did not attend'
                         : 'No time recorded'
@@ -449,9 +454,9 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
                   <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${getAttendanceColor(record.status)}`}>
                     {record.status}
                   </span>
-                  {record.status === 'present' && record.checkIn && record.checkOut && (
+                  {record.status === 'present' && record.check_in && record.check_out && (
                     <p className="text-xs text-gray-500 mt-1">
-                       {calculateHours(record.checkIn, record.checkOut)} hours
+                       {calculateHours(record.check_in, record.check_out)} hours
                     </p>
                   )}
                 </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 export const useClasses = () => {
@@ -31,24 +31,30 @@ export const useClasses = () => {
   }
 
   // Fetch all programs
-  const fetchPrograms = async () => {
+  const fetchPrograms = useCallback(async () => {
     try {
+      console.log('Fetching programs...');
       const { data, error } = await supabase
         .from('programs')
         .select('*')
         .order('name')
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching programs:', error);
+        throw error;
+      }
       
+      console.log('Programs fetched successfully:', data);
       setPrograms(data || [])
     } catch (err) {
       console.error('Failed to fetch programs:', err)
     }
-  }
+  }, [])
 
   // Fetch all teachers from the users table (users with teacher role)
-  const fetchTeachers = async () => {
+  const fetchTeachers = useCallback(async () => {
     try {
+      console.log('Fetching teachers...');
       const { data, error } = await supabase
         .from('users')
         .select('id, first_name, last_name, email, department, status')
@@ -56,29 +62,38 @@ export const useClasses = () => {
         .eq('status', 'active')
         .order('first_name')
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching teachers:', error);
+        throw error;
+      }
       
+      console.log('Teachers fetched successfully:', data);
       setTeachers(data || [])
     } catch (err) {
       console.error('Failed to fetch teachers:', err)
     }
-  }
+  }, [])
 
   // Fetch all students
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     try {
+      console.log('Fetching students...');
       const { data, error } = await supabase
         .from('students')
         .select('id, name, program_id, class_id')
         .order('name')
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching students:', error);
+        throw error;
+      }
       
+      console.log('Students fetched successfully:', data);
       setStudents(data || [])
     } catch (err) {
       console.error('Failed to fetch students:', err)
     }
-  }
+  }, [])
 
   // Fetch classes by program
   const fetchClassesByProgram = async (programId: number) => {

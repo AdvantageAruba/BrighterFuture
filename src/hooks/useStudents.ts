@@ -7,6 +7,7 @@ export interface Student {
   email: string
   phone: string
   date_of_birth: string
+  gender?: string
   program_id: number
   status: string
   enrollment_date: string
@@ -179,27 +180,89 @@ export const useStudents = () => {
   // Delete student
   const deleteStudent = async (id: number) => {
     try {
-      // First, delete the student's picture if they have one
-      const student = students.find(s => s.id === id)
-      if (student?.picture_url) {
-        await deleteStudentPicture(id)
+      // First, delete all related records from all tables that reference this student
+      
+      // Delete attendance records
+      const { error: attendanceError } = await supabase
+        .from('attendance')
+        .delete()
+        .eq('student_id', id)
+
+      if (attendanceError) {
+        console.warn('Failed to delete attendance records, continuing with student deletion:', attendanceError)
       }
 
-      // Delete the student record
+      // Delete daily notes
+      const { error: dailyNotesError } = await supabase
+        .from('daily_notes')
+        .delete()
+        .eq('student_id', id)
+
+      if (dailyNotesError) {
+        console.warn('Failed to delete daily notes, continuing with student deletion:', dailyNotesError)
+      }
+
+      // Delete any other related records (add more tables as needed)
+      // For example, if you have forms, payments, etc.
+      
+      // Delete forms if they exist
+      try {
+        const { error: formsError } = await supabase
+          .from('forms')
+          .delete()
+          .eq('student_id', id)
+        
+        if (formsError) {
+          console.warn('Failed to delete forms, continuing with student deletion:', formsError)
+        }
+      } catch (formsError) {
+        console.warn('Forms table may not exist, continuing:', formsError)
+      }
+
+      // Delete payments if they exist
+      try {
+        const { error: paymentsError } = await supabase
+          .from('payments')
+          .delete()
+          .eq('student_id', id)
+        
+        if (paymentsError) {
+          console.warn('Failed to delete payments, continuing with student deletion:', paymentsError)
+        }
+      } catch (paymentsError) {
+        console.warn('Payments table may not exist, continuing:', paymentsError)
+      }
+
+      // Then, delete the student's picture if they have one
+      const student = students.find(s => s.id === id)
+      if (student?.picture_url) {
+        try {
+          await deleteStudentPicture(id)
+        } catch (pictureError) {
+          console.warn('Failed to delete student picture, continuing with student deletion:', pictureError)
+        }
+      }
+
+      // Finally, delete the student record
       const { error } = await supabase
         .from('students')
         .delete()
         .eq('id', id)
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase delete error:', error)
+        throw error
+      }
       
       // Remove from local state
       setStudents(prev => prev.filter(student => student.id !== id))
       
       return { success: true }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete student')
-      return { success: false, error: err instanceof Error ? err.message : 'Failed to delete student' }
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'
+      console.error('Error deleting student:', err)
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
     }
   }
 

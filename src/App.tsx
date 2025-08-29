@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Users, Calendar as CalendarIcon, Settings as SettingsIcon, BookOpen, FileText, Activity, Home, Plus, Clock, MessageSquare } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Users, Calendar as CalendarIcon, Settings as SettingsIcon, BookOpen, FileText, Activity, Home, Plus, Clock, MessageSquare, Database } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Students from './components/Students';
 import Attendance from './components/Attendance';
@@ -11,6 +11,7 @@ import ProgramManagement from './components/ProgramManagement';
 import Settings from './components/Settings';
 import UserProfile from './components/UserProfile';
 import Navigation from './components/Navigation';
+import SupabaseTest from './components/SupabaseTest';
 import { useClasses } from './hooks/useClasses';
 
 function App() {
@@ -24,10 +25,15 @@ function App() {
   // Move useClasses to App level so it persists across tab switches
   const classesData = useClasses();
 
-  const renderContent = React.useMemo(() => {
+  // Memoize the setActiveTab function to prevent unnecessary re-renders
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+  }, []);
+
+  const renderContent = useMemo(() => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard setActiveTab={setActiveTab} />;
+        return <Dashboard setActiveTab={handleTabChange} />;
       case 'students':
         return <Students />;
       case 'attendance':
@@ -45,17 +51,19 @@ function App() {
       case 'settings':
         return <Settings />;
       case 'profile':
-        return <UserProfile user={user} onBack={() => setActiveTab('dashboard')} />;
+        return <UserProfile user={user} onBack={() => handleTabChange('dashboard')} />;
+      case 'test':
+        return <SupabaseTest />;
       default:
-        return <Dashboard setActiveTab={setActiveTab} />;
+        return <Dashboard setActiveTab={handleTabChange} />;
     }
-  }, [activeTab, user, classesData]);
+  }, [activeTab, user, classesData, handleTabChange]);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation 
         activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+        setActiveTab={handleTabChange} 
         user={user} 
       />
       

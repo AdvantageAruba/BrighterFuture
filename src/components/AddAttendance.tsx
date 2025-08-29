@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Calendar, Users, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { useStudents } from '../hooks/useStudents';
 import { useAttendance } from '../hooks/useAttendance';
+import { useClasses } from '../hooks/useClasses';
 
 interface AddAttendanceProps {
   isOpen: boolean;
@@ -9,9 +10,10 @@ interface AddAttendanceProps {
   selectedDate?: string;
   existingRecord?: any; // Add this prop for editing existing records
   studentId?: number; // Add this prop for editing specific student attendance
+  onAttendanceAdded?: () => void; // Callback when attendance is successfully added
 }
 
-const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selectedDate, existingRecord, studentId }) => {
+const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selectedDate, existingRecord, studentId, onAttendanceAdded }) => {
   const [formData, setFormData] = useState({
     date: selectedDate || new Date().toISOString().split('T')[0],
     program: '',
@@ -25,6 +27,37 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
     checkOut: string;
     notes: string;
   }}>({});
+
+  // Use real data from Supabase
+  const { programs: supabasePrograms, students: supabaseStudents } = useStudents();
+  const { classes: realClasses } = useClasses();
+  const { addAttendance, updateAttendance } = useAttendance();
+
+  // Transform programs for UI
+  const programs = supabasePrograms.map(p => ({ 
+    id: p.id.toString(), 
+    name: p.name 
+  }));
+
+  // Use real classes from database instead of mock data
+  const classes = realClasses.map(cls => ({
+    id: cls.id,
+    name: cls.name,
+    program: cls.program_id.toString()
+  }));
+
+  // Students organized by program using real data
+  const studentsByProgram = supabasePrograms.reduce((acc, program) => {
+    const programStudents = supabaseStudents.filter(student => student.program_id === program.id);
+    acc[program.id.toString()] = programStudents.map(student => ({
+      id: student.id,
+      name: student.name,
+      age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
+      class: student.class_id ? realClasses.find(c => c.id === student.class_id)?.name || 'Unassigned' : 'Unassigned',
+      classId: student.class_id || null
+    }));
+    return acc;
+  }, {} as Record<string, any[]>);
 
   // Pre-populate form when editing existing record
   useEffect(() => {
@@ -58,42 +91,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
         }
       });
     }
-  }, [existingRecord, studentId]);
-
-  // Use real data from Supabase
-  const { programs: supabasePrograms, students: supabaseStudents } = useStudents();
-
-  // Transform programs for UI
-  const programs = supabasePrograms.map(p => ({ 
-    id: p.id.toString(), 
-    name: p.name 
-  }));
-
-  // Mock classes for now - will be updated when classes table is implemented
-  const classes = [
-    { id: 'grade-1a', name: 'Grade 1A', program: '1' },
-    { id: 'grade-1b', name: 'Grade 1B', program: '1' },
-    { id: 'grade-2a', name: 'Grade 2A', program: '1' },
-    { id: 'grade-2b', name: 'Grade 2B', program: '1' },
-    { id: 'early-learners', name: 'Early Learners', program: '2' },
-    { id: 'pre-k', name: 'Pre-K', program: '2' },
-    { id: 'individual-1', name: 'Individual Session Room 1', program: '3' },
-    { id: 'individual-2', name: 'Individual Session Room 2', program: '3' },
-    { id: 'consultation-a', name: 'Consultation Group A', program: '4' }
-  ];
-
-  // Students organized by program using real data
-  const studentsByProgram = supabasePrograms.reduce((acc, program) => {
-    const programStudents = supabaseStudents.filter(student => student.program_id === program.id);
-    acc[program.id.toString()] = programStudents.map(student => ({
-      id: student.id,
-      name: student.name,
-      age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
-      class: 'Default Class', // Will be updated when classes are implemented
-      classId: 'default'
-    }));
-    return acc;
-  }, {} as Record<string, any[]>);
+  }, [existingRecord, studentId, studentsByProgram]);
 
   if (!isOpen) return null;
 
@@ -103,7 +101,8 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
     
     if (!formData.class) return programStudents;
     
-    return programStudents.filter(student => student.classId === formData.class);
+    // Filter students by their assigned class_id
+    return programStudents.filter(student => student.classId?.toString() === formData.class);
   };
 
   const getAvailableClasses = () => {
@@ -133,6 +132,25 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
     }
   };
 
+  // Initialize student attendance when program/class changes
+  useEffect(() => {
+    if (formData.program && !existingRecord) {
+      const availableStudents = getAvailableStudents();
+      if (availableStudents.length > 0) {
+        const initialAttendance = availableStudents.reduce((acc, student) => {
+          acc[student.id] = {
+            status: 'present', // Default to present
+            checkIn: '08:30',  // Default check-in time
+            checkOut: '15:00', // Default check-out time
+            notes: ''
+          };
+          return acc;
+        }, {} as any);
+        setStudentAttendance(initialAttendance);
+      }
+    }
+  }, [formData.program, formData.class, existingRecord]);
+
   const handleStudentAttendanceChange = (studentId: number, field: string, value: string) => {
     setStudentAttendance(prev => ({
       ...prev,
@@ -153,7 +171,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
     }
 
     // Check if at least one student has attendance marked
-    const hasAttendance = Object.values(studentAttendance).some(att => att.status !== '');
+    const hasAttendance = Object.values(studentAttendance).some(att => att.status && att.status !== '');
     if (!hasAttendance) {
       alert('Please mark attendance for at least one student');
       return;
@@ -173,17 +191,26 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
           notes: att.notes || formData.notes
         };
 
+        console.log('Saving attendance data:', attendanceData);
+
         // If editing existing record, update it
-        if (existingRecord && parseInt(studentId) === studentId) {
+        if (existingRecord && parseInt(studentId) === existingRecord.student_id) {
+          console.log('Updating existing attendance record:', existingRecord.id);
           return updateAttendance(existingRecord.id, attendanceData);
         } else {
           // Otherwise, create new record
+          console.log('Creating new attendance record');
           return addAttendance(attendanceData);
         }
       }).filter(Boolean);
 
+      console.log('Filtered attendance promises:', attendancePromises);
+
       // Wait for all attendance records to be saved
       const results = await Promise.all(attendancePromises);
+      
+      // Debug: Log the results to see what's happening
+      console.log('Attendance save results:', results);
       
       // Check if all operations were successful
       const allSuccessful = results.every(result => result?.success);
@@ -191,9 +218,36 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
       if (allSuccessful) {
         console.log('Attendance saved successfully');
         alert('Attendance recorded successfully!');
+        // Call the callback to notify parent component
+        if (onAttendanceAdded) {
+          onAttendanceAdded();
+        }
         onClose();
       } else {
-        alert('Some attendance records failed to save. Please try again.');
+        // Log which records failed
+        const failedRecords = results.filter(result => !result?.success);
+        console.error('Failed attendance records:', failedRecords);
+        
+        // Check for specific error types
+        const hasDuplicateError = failedRecords.some(result => 
+          result?.error?.includes('duplicate') || 
+          result?.error?.includes('unique') ||
+          result?.error?.includes('already exists')
+        );
+        
+        const hasConnectionError = failedRecords.some(result => 
+          result?.error?.includes('connection') || 
+          result?.error?.includes('network') ||
+          result?.error?.includes('ERR_CONNECTION_CLOSED')
+        );
+        
+        if (hasConnectionError) {
+          alert('Connection to the server was lost. Please check your internet connection and try again.');
+        } else if (hasDuplicateError) {
+          alert('Some students already have attendance records for this date. Please check existing records.');
+        } else {
+          alert('Some attendance records failed to save. Please try again.');
+        }
       }
     } catch (error) {
       console.error('Error saving attendance:', error);
@@ -305,23 +359,26 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
                   <Users className="w-5 h-5" />
                   <span>Student Attendance</span>
                 </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Students start with "Present" as default. Click the status buttons to change attendance status.
+                </p>
                 <div className="space-y-4">
                   {getAvailableStudents().map((student) => {
                     const attendance = studentAttendance[student.id] || {
-                      status: 'present',
-                      checkIn: '08:30',
-                      checkOut: '15:00',
+                      status: '',
+                      checkIn: '',
+                      checkOut: '',
                       notes: ''
                     };
 
                     return (
                       <div 
                         key={student.id} 
-                        className={`border-2 rounded-lg p-4 transition-all duration-200 ${getStatusColor(attendance.status)}`}
+                        className={`border-2 rounded-lg p-4 transition-all duration-200 ${getStatusColor(attendance.status || 'present')}`}
                       >
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center space-x-3">
-                            {getStatusIcon(attendance.status)}
+                            {getStatusIcon(attendance.status || 'present')}
                             <div>
                               <h4 className="font-medium text-gray-900">{student.name}</h4>
                               <p className="text-sm text-gray-600">Age {student.age} • {student.class}</p>
@@ -332,7 +389,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
                               type="button"
                               onClick={() => handleStudentAttendanceChange(student.id, 'status', 'present')}
                               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                                attendance.status === 'present' 
+                                attendance.status === 'present' || attendance.status === '' 
                                   ? 'bg-green-600 text-white' 
                                   : 'bg-gray-100 text-gray-700 hover:bg-green-100'
                               }`}
@@ -370,7 +427,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
                               <label className="block text-sm font-medium text-gray-700 mb-1">Check-in Time</label>
                               <input
                                 type="time"
-                                value={attendance.checkIn}
+                                value={attendance.checkIn || ''}
                                 onChange={(e) => handleStudentAttendanceChange(student.id, 'checkIn', e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               />
@@ -379,7 +436,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
                               <label className="block text-sm font-medium text-gray-700 mb-1">Check-out Time</label>
                               <input
                                 type="time"
-                                value={attendance.checkOut}
+                                value={attendance.checkOut || ''}
                                 onChange={(e) => handleStudentAttendanceChange(student.id, 'checkOut', e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               />
@@ -391,7 +448,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
                           <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
                           <input
                             type="text"
-                            value={attendance.notes}
+                            value={attendance.notes || ''}
                             onChange={(e) => handleStudentAttendanceChange(student.id, 'notes', e.target.value)}
                             placeholder="Any additional notes about attendance..."
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

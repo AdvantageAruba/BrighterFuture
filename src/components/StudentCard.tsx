@@ -86,8 +86,8 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onDe
             )}
           </button>
           <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 rounded transition-all duration-200">
-          <MoreVertical className="w-4 h-4 text-gray-400" />
-        </button>
+            <MoreVertical className="w-4 h-4 text-gray-400" />
+          </button>
         </div>
       </div>
 
@@ -99,79 +99,47 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onDe
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">Status:</span>
-          <div className="flex items-center space-x-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(student.status)}`}>
-            {student.status}
-          </span>
-            {student.status === 'inactive' && (
-              <span className="text-xs text-gray-500">(Inactive)</span>
-            )}
-          </div>
+          <span className="text-sm text-gray-600">Last Session:</span>
+          <span className="text-sm text-gray-900">{student.lastSession}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">Last Session:</span>
-          <span className="text-sm text-gray-900">{new Date(student.lastSession).toLocaleDateString()}</span>
+          <span className="text-sm text-gray-600">Status:</span>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(student.status)}`}>
+            {student.status}
+          </span>
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
-        <div className="flex items-center space-x-1">
-          <FileText className="w-4 h-4" />
-          <span>{student.assessments} assessments</span>
-        </div>
-        <div className="flex items-center space-x-1">
-          <MessageSquare className="w-4 h-4" />
-          <span>{student.notes} notes</span>
-        </div>
+      <div className="flex items-center justify-between text-sm text-gray-600">
+        <span>Assessments: {student.assessments}</span>
+        <span>Notes: {student.notes}</span>
       </div>
 
-      <div className="flex space-x-2 mb-3" onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={onView}
-          className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-lg transition-colors duration-200 ${
-            student.status === 'active' 
-              ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' 
-              : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-          }`}
+      <div className="flex items-center justify-center space-x-2 mt-4 pt-4 border-t border-gray-200">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onView(); }}
+          className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors border border-gray-300"
         >
           <Eye className="w-4 h-4" />
-          <span>View Details</span>
+          <span>View</span>
         </button>
         <button 
-          onClick={onEdit}
-          className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-lg transition-colors duration-200 ${
-            student.status === 'active' 
-              ? 'bg-gray-50 text-gray-700 hover:bg-gray-100' 
-              : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-          }`}
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors border border-gray-300"
         >
           <Edit className="w-4 h-4" />
           <span>Edit</span>
         </button>
         {onDelete && (
           <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              if (window.confirm(`Are you sure you want to delete ${student.name}? This action cannot be undone.`)) {
-                onDelete(student.id);
-              }
-            }}
-            className="px-3 py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg transition-colors duration-200"
-            title="Delete student"
+            onClick={(e) => { e.stopPropagation(); onDelete(student.id); }}
+            className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors border border-gray-300"
           >
             <Trash2 className="w-4 h-4" />
+            <span>Delete</span>
           </button>
         )}
       </div>
-
-      {student.status === 'inactive' && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-xs text-red-700 text-center">
-            This student is currently inactive and not receiving services
-          </p>
-        </div>
-      )}
     </div>
   );
 };

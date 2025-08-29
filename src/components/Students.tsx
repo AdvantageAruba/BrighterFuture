@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Eye, Edit, MoreVertical, Users, GraduationCap, Baby, MessageSquare, Heart } from 'lucide-react';
-import StudentCard from './StudentCard';
-import StudentModal from './StudentModal';
+import { Plus, Search, Filter, Eye, Edit, Trash2, Users, Calendar, BookOpen, GraduationCap } from 'lucide-react';
 import AddStudent from './AddStudent';
-import { useStudents } from '../hooks/useStudents';
 import EditStudent from './EditStudent';
+import StudentModal from './StudentModal';
+import StudentCard from './StudentCard';
+import { useStudents } from '../hooks/useStudents';
 
 const Students: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -13,6 +13,8 @@ const Students: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState('list'); // 'list', 'add', 'edit'
   const [editingStudent, setEditingStudent] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
   // Use real data from Supabase
   const { 
     students: supabaseStudents, 
@@ -23,7 +25,8 @@ const Students: React.FC = () => {
     updateStudent, 
     deleteStudent,
     getStudentsByProgram,
-    getProgramName 
+    getProgramName,
+    refreshStudents
   } = useStudents();
 
   // Debug logging
@@ -31,8 +34,15 @@ const Students: React.FC = () => {
     supabaseStudents: supabaseStudents?.length || 0,
     supabasePrograms: supabasePrograms?.length || 0,
     loading,
-    error
+    error,
+    refreshTrigger
   });
+
+  // Force re-render when refreshTrigger changes
+  useEffect(() => {
+    // This effect will run whenever refreshTrigger changes
+    // This ensures the component re-renders after student operations
+  }, [refreshTrigger]);
 
   // Transform students data for the UI
   const students = (supabaseStudents && Array.isArray(supabaseStudents) ? supabaseStudents : []).map(student => {
@@ -47,6 +57,7 @@ const Students: React.FC = () => {
         id: student.id,
         name: student.name,
         age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
+        gender: student.gender || 'Not specified',
         program: student.program_id ? student.program_id.toString() : '0',
         programName: getProgramName && student.program_id ? getProgramName(student.program_id) : 'Unknown Program',
         lastSession: student.updated_at ? new Date(student.updated_at).toISOString().split('T')[0] : 'Unknown',
@@ -82,6 +93,7 @@ const Students: React.FC = () => {
   ];
 
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedGender, setSelectedGender] = useState('all');
 
   const filteredStudents = (students && Array.isArray(students) ? students : []).filter(student => {
     try {
@@ -89,7 +101,8 @@ const Students: React.FC = () => {
       const matchesSearch = student.name.toLowerCase().includes((searchTerm || '').toLowerCase());
       const matchesProgram = selectedProgram === 'all' || (selectedProgram && student.program === selectedProgram);
       const matchesStatus = selectedStatus === 'all' || (selectedStatus && student.status === selectedStatus);
-      return matchesSearch && matchesProgram && matchesStatus;
+      const matchesGender = selectedGender === 'all' || (selectedGender && student.gender === selectedGender);
+      return matchesSearch && matchesProgram && matchesStatus && matchesGender;
     } catch (error) {
       console.error('Error filtering student:', error, student);
       return false;
@@ -105,7 +118,44 @@ const Students: React.FC = () => {
       studentData.programName = getProgramName(studentData.program_id);
     }
     
-    setSelectedStudent(studentData);
+    // Ensure all required fields are properly mapped for the modal
+    const enrichedStudentData = {
+      ...studentData,
+      // Map the actual Supabase field names to what the modal expects
+      name: studentData.name || 'Unknown',
+      age: studentData.date_of_birth ? Math.floor((new Date().getTime() - new Date(studentData.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : 'Unknown',
+      dateOfBirth: studentData.date_of_birth || 'Not provided',
+      enrollmentDate: studentData.enrollment_date || 'Not provided',
+      status: studentData.status || 'active',
+      
+      // Contact info - map from actual Supabase fields
+      parentName: studentData.parent_name || 'Not provided',
+      parentPhone: studentData.phone || 'Not provided',
+      parentEmail: studentData.email || 'Not provided',
+      
+      // Program info
+      programName: studentData.programName || (studentData.program_id ? `Program ID: ${studentData.program_id}` : 'Not assigned'),
+      programId: studentData.program_id,
+      classId: studentData.class_id,
+      
+      // Additional fields from Supabase
+      address: studentData.address || 'Not provided',
+      emergencyContact: studentData.emergency_contact || 'Not provided',
+      emergencyPhone: studentData.emergency_phone || 'Not provided',
+      medicalConditions: studentData.medical_conditions || 'None known',
+      allergies: studentData.allergies || 'None known',
+      className: studentData.class_name || 'Not assigned',
+      teacher: studentData.teacher || 'Not assigned',
+      
+      // Picture
+      pictureUrl: studentData.picture_url,
+      
+      // Timestamps
+      createdAt: studentData.created_at,
+      updatedAt: studentData.updated_at
+    };
+    
+    setSelectedStudent(enrichedStudentData);
     setIsModalOpen(true);
   };
 
@@ -120,13 +170,42 @@ const Students: React.FC = () => {
       if (result.success) {
         console.log('Student deleted successfully');
         // The hook will automatically update the local state
-      } else {
-        console.error('Failed to delete student:', result.error);
-        alert(`Failed to delete student: ${result.error}`);
-      }
+              } else {
+          console.error('Failed to delete student:', result.error);
+          
+          // Show user-friendly error messages
+          let userMessage = 'Failed to delete student';
+          if (result.error) {
+            if (result.error.includes('foreign key constraint') || result.error.includes('attendance') || result.error.includes('daily_notes')) {
+              userMessage = 'Cannot delete student because they have related records (attendance, daily notes, etc.). The system will now automatically remove all related records and try again.';
+            } else if (result.error.includes('permission')) {
+              userMessage = 'Permission denied. You may not have the right to delete students.';
+            } else if (result.error.includes('network') || result.error.includes('connection')) {
+              userMessage = 'Network error. Please check your internet connection and try again.';
+            } else {
+              userMessage = `Failed to delete student: ${result.error}`;
+            }
+          }
+          
+          alert(userMessage);
+        }
     } catch (error) {
       console.error('Error deleting student:', error);
-      alert('Failed to delete student. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      
+      // Show user-friendly error messages
+      let userMessage = 'Failed to delete student';
+      if (errorMessage.includes('foreign key constraint') || errorMessage.includes('attendance') || errorMessage.includes('daily_notes')) {
+        userMessage = 'Cannot delete student because they have related records (attendance, daily notes, etc.). The system will now automatically remove all related records and try again.';
+      } else if (errorMessage.includes('permission')) {
+        userMessage = 'Permission denied. You may not have the right to delete students.';
+      } else if (errorMessage.includes('network') || errorMessage.includes('connection')) {
+        userMessage = 'Network error. Please check your internet connection and try again.';
+      } else {
+        userMessage = `Failed to delete student: ${errorMessage}`;
+      }
+      
+      alert(userMessage);
     }
   };
 
@@ -150,11 +229,25 @@ const Students: React.FC = () => {
   };
 
   if (currentView === 'add' && AddStudent) {
-    return <AddStudent onBack={handleBackToList} />;
+    return <AddStudent onBack={handleBackToList} onStudentAdded={() => {
+      // Force a refresh of the student data to ensure the new student appears
+      if (refreshStudents) {
+        refreshStudents();
+      }
+      // Also trigger a component re-render
+      setRefreshTrigger(prev => prev + 1);
+    }} />;
   }
 
   if (currentView === 'edit' && editingStudent && EditStudent) {
-    return <EditStudent student={editingStudent} onBack={handleBackToList} />;
+    return <EditStudent student={editingStudent} onBack={handleBackToList} onStudentUpdated={() => {
+      // Force a refresh of the student data to ensure updates are reflected
+      if (refreshStudents) {
+        refreshStudents();
+      }
+      // Also trigger a component re-render
+      setRefreshTrigger(prev => prev + 1);
+    }} />;
   }
 
   // Show loading state
@@ -246,6 +339,20 @@ const Students: React.FC = () => {
               </select>
             </div>
             <div className="flex items-center space-x-2">
+              <Filter className="w-5 h-5 text-gray-400" />
+              <select
+                value={selectedGender || 'all'}
+                onChange={(e) => setSelectedGender(e.target.value || 'all')}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Genders</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+                <option value="prefer-not-to-say">Prefer not to say</option>
+              </select>
+            </div>
+            <div className="flex items-center space-x-2">
             <Filter className="w-5 h-5 text-gray-400" />
             <select
               value={selectedProgram || 'all'}
@@ -295,12 +402,12 @@ const Students: React.FC = () => {
                 switch (programId) {
                   case 'academy':
                     return <GraduationCap className="w-8 h-8 text-blue-600" />;
-                  case 'first-steps':
-                    return <Baby className="w-8 h-8 text-green-600" />;
-                  case 'individual-therapy':
-                    return <Heart className="w-8 h-8 text-purple-600" />;
-                  case 'consultancy':
-                    return <MessageSquare className="w-8 h-8 text-orange-600" />;
+                                     case 'first-steps':
+                     return <BookOpen className="w-8 h-8 text-green-600" />;
+                   case 'individual-therapy':
+                     return <Calendar className="w-8 h-8 text-purple-600" />;
+                   case 'consultancy':
+                     return <Users className="w-8 h-8 text-orange-600" />;
                   default:
                     return <Users className="w-8 h-8 text-gray-600" />;
                 }
@@ -354,6 +461,34 @@ const Students: React.FC = () => {
           <div className="bg-blue-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">{(students && Array.isArray(students) ? students : []).length}</div>
             <div className="text-sm text-blue-700">Total Students</div>
+          </div>
+        </div>
+
+        {/* Gender Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 rounded-lg p-4 text-center">
+            <div className="text-2xl font-bold text-blue-600">
+              {(students && Array.isArray(students) ? students : []).filter(s => s && s.gender === 'male').length}
+            </div>
+            <div className="text-sm text-blue-700">Male Students</div>
+          </div>
+          <div className="bg-pink-50 rounded-lg p-4 text-center">
+            <div className="text-2xl font-bold text-pink-600">
+              {(students && Array.isArray(students) ? students : []).filter(s => s && s.gender === 'female').length}
+            </div>
+            <div className="text-sm text-pink-700">Female Students</div>
+          </div>
+          <div className="bg-purple-50 rounded-lg p-4 text-center">
+            <div className="text-2xl font-bold text-purple-600">
+              {(students && Array.isArray(students) ? students : []).filter(s => s && s.gender === 'other').length}
+            </div>
+            <div className="text-sm text-purple-700">Other</div>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4 text-center">
+            <div className="text-2xl font-bold text-gray-600">
+              {(students && Array.isArray(students) ? students : []).filter(s => s && s.gender === 'prefer-not-to-say').length}
+            </div>
+            <div className="text-sm text-gray-700">Not Specified</div>
           </div>
         </div>
 

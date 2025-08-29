@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User } from 'lucide-react';
+import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User, Database } from 'lucide-react';
 
 interface NavigationProps {
   activeTab: string;
@@ -22,6 +22,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'programs', label: 'Programs', icon: BookOpen },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'test', label: 'Database Test', icon: Database },
   ];
 
   return (
