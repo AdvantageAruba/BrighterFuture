@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Save, BookOpen, Users, Calendar, MapPin, Phone, Mail, User } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface AddProgramProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
     budget: '',
     notes: ''
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const programTypes = [
     { id: 'full-time-education', name: 'Full-time Education' },
@@ -58,11 +61,62 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('New program data:', formData);
-    alert('Program created successfully!');
-    onClose();
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Prepare the data for the database
+      const programData = {
+        name: formData.name,
+        description: formData.description,
+        status: formData.status,
+        // Add other fields as needed - adjust based on your programs table schema
+      };
+
+      // Insert the program into the database
+      const { data, error } = await supabase
+        .from('programs')
+        .insert([programData])
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data[0]) {
+        console.log('Program created successfully:', data[0]);
+        // Reset form
+        setFormData({
+          name: '',
+          description: '',
+          type: '',
+          capacity: '',
+          ageRange: '',
+          location: '',
+          schedule: '',
+          startDate: '',
+          coordinator: '',
+          coordinatorEmail: '',
+          coordinatorPhone: '',
+          status: 'planning',
+          requirements: '',
+          objectives: '',
+          curriculum: '',
+          assessmentMethods: '',
+          staffRequirements: '',
+          budget: '',
+          notes: ''
+        });
+        onClose();
+      }
+    } catch (err) {
+      console.error('Error creating program:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create program');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -82,6 +136,13 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+          {/* Error Display */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800 text-sm">{error}</p>
+            </div>
+          )}
+          
           <div className="space-y-8">
             {/* Basic Program Information */}
             <div>

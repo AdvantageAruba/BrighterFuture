@@ -218,10 +218,10 @@ const EditStudent: React.FC<EditStudentProps> = ({ student, onBack }) => {
                     {formData.program ? 'Select teacher...' : 'Select program first'}
                   </option>
                   {teachers
-                    .filter(teacher => !formData.program || teacher.program === formData.program)
+                    .filter(teacher => !formData.program || teacher.department === formData.program)
                     .map((teacher) => (
-                      <option key={teacher.id} value={teacher.name}>
-                        {teacher.name}
+                      <option key={teacher.id} value={`${teacher.first_name} ${teacher.last_name}`}>
+                        {teacher.first_name} {teacher.last_name}
                       </option>
                     ))}
                 </select>

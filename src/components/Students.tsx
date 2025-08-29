@@ -53,7 +53,9 @@ const Students: React.FC = () => {
         status: student.status || 'unknown',
         avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`,
         assessments: 0, // Will be updated when forms are implemented
-        notes: 0 // Will be updated when daily notes are implemented
+        notes: 0, // Will be updated when daily notes are implemented
+        // Store reference to original Supabase data for the modal
+        originalData: student
       };
     } catch (error) {
       console.error('Error transforming student data:', error, student);
@@ -95,7 +97,15 @@ const Students: React.FC = () => {
   });
 
   const handleViewStudent = (student: any) => {
-    setSelectedStudent(student);
+    // Pass the original Supabase data to the modal, not the transformed data
+    const studentData = student.originalData || student;
+    
+    // Add program name to the student data for the modal
+    if (studentData && studentData.program_id) {
+      studentData.programName = getProgramName(studentData.program_id);
+    }
+    
+    setSelectedStudent(studentData);
     setIsModalOpen(true);
   };
 

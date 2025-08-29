@@ -12,6 +12,16 @@ export interface Student {
   enrollment_date: string
   notes: string
   picture_url?: string | null
+  // Additional fields for comprehensive student information
+  parent_name?: string
+  address?: string
+  emergency_contact?: string
+  emergency_phone?: string
+  medical_conditions?: string
+  allergies?: string
+  class_name?: string
+  class_id?: number
+  teacher?: string
   created_at: string
   updated_at: string
 }
@@ -24,9 +34,33 @@ export interface Program {
   status: string
 }
 
+export interface Teacher {
+  id: number
+  first_name: string
+  last_name: string
+  email: string
+  department?: string
+  status: string
+}
+
+export interface Class {
+  id: number
+  name: string
+  program_id: number
+  teacher_id: number | null
+  max_capacity: number
+  current_enrollment: number
+  status: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
 export const useStudents = () => {
   const [students, setStudents] = useState<Student[]>([])
   const [programs, setPrograms] = useState<Program[]>([])
+  const [teachers, setTeachers] = useState<Teacher[]>([])
+  const [classes, setClasses] = useState<Class[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,6 +94,40 @@ export const useStudents = () => {
       setPrograms(data || [])
     } catch (err) {
       console.error('Failed to fetch programs:', err)
+    }
+  }
+
+  // Fetch all teachers from the users table (users with teacher role)
+  const fetchTeachers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email, department, status')
+        .eq('role', 'teacher')
+        .eq('status', 'active')
+        .order('first_name')
+
+      if (error) throw error
+      
+      setTeachers(data || [])
+    } catch (err) {
+      console.error('Failed to fetch teachers:', err)
+    }
+  }
+
+  // Fetch all classes
+  const fetchClasses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('classes')
+        .select('*')
+        .eq('status', 'active')
+        .order('name')
+
+      if (error) throw error
+      setClasses(data || [])
+    } catch (err) {
+      console.error('Failed to fetch classes:', err)
     }
   }
 
@@ -144,6 +212,22 @@ export const useStudents = () => {
   const getProgramName = (programId: number) => {
     const program = programs.find(p => p.id === programId)
     return program?.name || 'Unknown Program'
+  }
+
+  // Get classes by program ID
+  const getClassesByProgram = (programId: number) => {
+    return classes.filter(cls => cls.program_id === programId)
+  }
+
+  // Get teacher name by ID
+  const getTeacherName = (teacherId: number) => {
+    const teacher = teachers.find(t => t.id === teacherId)
+    return teacher ? `${teacher.first_name} ${teacher.last_name}` : 'Unknown Teacher'
+  }
+
+  // Get class by ID
+  const getClassById = (classId: number) => {
+    return classes.find(cls => cls.id === classId)
   }
 
   // Get student count by status
@@ -237,11 +321,15 @@ export const useStudents = () => {
   useEffect(() => {
     fetchStudents()
     fetchPrograms()
+    fetchTeachers()
+    fetchClasses()
   }, [])
 
   return {
     students,
     programs,
+    teachers,
+    classes,
     loading,
     error,
     addStudent,
@@ -249,10 +337,15 @@ export const useStudents = () => {
     deleteStudent,
     getStudentsByProgram,
     getProgramName,
+    getClassesByProgram,
+    getTeacherName,
+    getClassById,
     getStudentCountByStatus,
     uploadStudentPicture,
     deleteStudentPicture,
     refreshStudents: fetchStudents,
-    refreshPrograms: fetchPrograms
+    refreshPrograms: fetchPrograms,
+    refreshTeachers: fetchTeachers,
+    refreshClasses: fetchClasses
   }
 }

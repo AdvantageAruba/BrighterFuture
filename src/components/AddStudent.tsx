@@ -14,7 +14,7 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
     dateOfBirth: '',
     age: '',
     program: '',
-    className: '',
+    classId: '', // Changed from className to classId
     teacher: '',
     parentName: '',
     parentPhone: '',
@@ -31,7 +31,15 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
   const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
 
   // Use real data from Supabase
-  const { programs: supabasePrograms, addStudent, uploadStudentPicture } = useStudents();
+  const { 
+    programs: supabasePrograms, 
+    classes: supabaseClasses,
+    teachers: supabaseTeachers,
+    getClassesByProgram,
+    getTeacherName,
+    addStudent, 
+    uploadStudentPicture 
+  } = useStudents();
 
   // Transform programs for UI
   const programs = supabasePrograms.map(p => ({ 
@@ -39,27 +47,12 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
     name: p.name 
   }));
 
-  // Mock teachers for now - will be updated when teachers table is implemented
-  const teachers = [
-    { id: 'emily-smith', name: 'Ms. Emily Smith', program: '1' },
-    { id: 'michael-wilson', name: 'Dr. Michael Wilson', program: '3' },
-    { id: 'lisa-brown', name: 'Ms. Lisa Brown', program: '2' },
-    { id: 'sarah-johnson', name: 'Dr. Sarah Johnson', program: '1' },
-    { id: 'jennifer-davis', name: 'Ms. Jennifer Davis', program: '4' }
-  ];
-
-  // Mock classes for now - will be updated when classes table is implemented
-  const classes = [
-    { id: 'grade-1a', name: 'Grade 1A', program: '1' },
-    { id: 'grade-1b', name: 'Grade 1B', program: '1' },
-    { id: 'grade-2a', name: 'Grade 2A', program: '1' },
-    { id: 'grade-2b', name: 'Grade 2B', program: '1' },
-    { id: 'early-learners', name: 'Early Learners', program: '2' },
-    { id: 'pre-k', name: 'Pre-K', program: '2' },
-    { id: 'individual-1', name: 'Individual Session Room 1', program: '3' },
-    { id: 'individual-2', name: 'Individual Session Room 2', program: '3' },
-    { id: 'consultation-a', name: 'Consultation Group A', program: '4' }
-  ];
+  // Get classes for the selected program
+  const availableClasses = formData.program ? getClassesByProgram(parseInt(formData.program)) : [];
+  
+  // Get teacher for the selected class
+  const selectedClass = availableClasses.find(cls => cls.id.toString() === formData.classId);
+  const assignedTeacher = selectedClass && selectedClass.teacher_id ? getTeacherName(selectedClass.teacher_id) : 'No teacher assigned';
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
@@ -69,20 +62,25 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
         [name]: value
       };
       
-      // Automatically calculate age when date of birth changes
-      if (name === 'dateOfBirth' && value) {
-        const birthDate = new Date(value);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDiff = today.getMonth() - birthDate.getMonth();
-        
-        // Adjust age if birthday hasn't occurred yet this year
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
-        }
-        
-        newData.age = age.toString();
-      }
+             // Automatically calculate age when date of birth changes
+       if (name === 'dateOfBirth' && value) {
+         const birthDate = new Date(value);
+         const today = new Date();
+         let age = today.getFullYear() - birthDate.getFullYear();
+         const monthDiff = today.getMonth() - birthDate.getMonth();
+         
+         // Adjust age if birthday hasn't occurred yet this year
+         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+           age--;
+         }
+         
+         newData.age = age.toString();
+       }
+       
+       // Reset class selection when program changes
+       if (name === 'program') {
+         newData.classId = '';
+       }
       
       return newData;
     });
@@ -116,7 +114,17 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
         program_id: parseInt(formData.program),
         status: formData.status,
         enrollment_date: new Date().toISOString().split('T')[0],
-        notes: formData.notes || ''
+        notes: formData.notes || '',
+        // Additional fields for comprehensive student information
+        parent_name: formData.parentName || '',
+        address: formData.address || '',
+        emergency_contact: formData.emergencyContact || '',
+        emergency_phone: formData.emergencyPhone || '',
+        medical_conditions: formData.medicalConditions || '',
+        allergies: formData.allergies || '',
+        class_name: selectedClass?.name || '',
+        class_id: selectedClass?.id || null,
+        teacher: assignedTeacher || ''
       };
 
       // Save to Supabase
@@ -258,48 +266,38 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack }) => {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
-                <select
-                  name="className"
-                  value={formData.className}
-                  onChange={handleInputChange}
-                  disabled={!formData.program}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <option value="">
-                    {formData.program ? 'Select class...' : 'Select program first'}
-                  </option>
-                  {classes
-                    .filter(cls => !formData.program || cls.program === formData.program)
-                    .map((cls) => (
-                      <option key={cls.id} value={cls.name}>
-                        {cls.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Teacher</label>
-                <select
-                  name="teacher"
-                  value={formData.teacher}
-                  onChange={handleInputChange}
-                  disabled={!formData.program}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <option value="">
-                    {formData.program ? 'Select teacher...' : 'Select program first'}
-                  </option>
-                  {teachers
-                    .filter(teacher => !formData.program || teacher.program === formData.program)
-                    .map((teacher) => (
-                      <option key={teacher.id} value={teacher.name}>
-                        {teacher.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
+                             <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
+                 <select
+                   name="classId"
+                   value={formData.classId}
+                   onChange={handleInputChange}
+                   disabled={!formData.program}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                 >
+                   <option value="">
+                     {formData.program ? 'Select class...' : 'Select program first'}
+                   </option>
+                   {availableClasses.map((cls) => (
+                     <option key={cls.id} value={cls.id}>
+                       {cls.name}
+                     </option>
+                   ))}
+                 </select>
+               </div>
+                             <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-2">Assigned Teacher</label>
+                 <input
+                   type="text"
+                   value={assignedTeacher || 'No teacher assigned'}
+                   readOnly
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                   placeholder="Teacher will be assigned based on class selection"
+                 />
+                 <p className="text-xs text-gray-500 mt-1">
+                   Teacher is automatically assigned based on the selected class
+                 </p>
+               </div>
             </div>
           </div>
 

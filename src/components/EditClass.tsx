@@ -8,8 +8,8 @@ interface EditClassProps {
   onClose: () => void;
   programs: Program[];
   teachers: Teacher[];
-  updateClass: (id: string, updates: Partial<Class>) => Promise<{ success: boolean; data?: Class; error?: string }>;
-  deleteClass: (id: string) => Promise<{ success: boolean; error?: string }>;
+  updateClass: (id: number, updates: Partial<Class>) => Promise<{ success: boolean; data?: Class; error?: string }>;
+  deleteClass: (id: number) => Promise<{ success: boolean; error?: string }>;
 }
 
 const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, programs, teachers, updateClass, deleteClass }) => {
@@ -17,7 +17,7 @@ const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, progr
     name: classData.name,
     program_id: classData.program_id,
     description: classData.description || '',
-    max_students: classData.max_students,
+    max_capacity: classData.max_capacity,
     status: classData.status,
     teacher_id: classData.teacher_id || null
   });
@@ -30,7 +30,7 @@ const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, progr
       name: classData.name,
       program_id: classData.program_id,
       description: classData.description || '',
-      max_students: classData.max_students,
+      max_capacity: classData.max_capacity,
       status: classData.status,
       teacher_id: classData.teacher_id || null
     });
@@ -85,7 +85,6 @@ const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, progr
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);
-      setShowDeleteConfirm(false);
     }
   };
 
@@ -93,7 +92,7 @@ const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, progr
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'max_students' ? parseInt(value) || 20 : value
+      [name]: name === 'max_capacity' ? parseInt(value) || 20 : value
     }));
   };
 
@@ -174,14 +173,14 @@ const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, progr
           </div>
 
           <div>
-            <label htmlFor="max_students" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="max_capacity" className="block text-sm font-medium text-gray-700 mb-2">
               Maximum Students
             </label>
             <input
               type="number"
-              id="max_students"
-              name="max_students"
-              value={formData.max_students}
+              id="max_capacity"
+              name="max_capacity"
+              value={formData.max_capacity}
               onChange={handleInputChange}
               min="1"
               max="50"
@@ -221,25 +220,31 @@ const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, progr
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">No teacher assigned</option>
-              {teachers.map((teacher) => (
-                <option key={teacher.id} value={teacher.id}>
-                  {teacher.first_name} {teacher.last_name} ({teacher.email})
-                </option>
-              ))}
+              {teachers && teachers.length > 0 ? (
+                teachers.map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.first_name} {teacher.last_name}
+                  </option>
+                ))
+              ) : (
+                <option value="" disabled>No teachers available</option>
+              )}
             </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Select a teacher to assign to this class (optional)
-            </p>
+            {teachers && teachers.length === 0 && (
+              <p className="text-xs text-red-500 mt-1">
+                No teachers found. Please ensure there are users with 'teacher' role.
+              </p>
+            )}
           </div>
 
           <div className="flex space-x-3 pt-4">
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors duration-200"
+              className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors duration-200"
             >
-              <Trash2 className="w-4 h-4 inline mr-2" />
-              Delete
+              <Trash2 className="w-4 h-4" />
+              <span>Delete</span>
             </button>
             <button
               type="button"

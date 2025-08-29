@@ -8,7 +8,7 @@ interface AddClassProps {
   programId?: number; // If provided, pre-select this program
   programs: Program[];
   teachers: Teacher[];
-  addClass: (classData: Omit<Class, 'created_at' | 'updated_at'>) => Promise<{ success: boolean; data?: Class; error?: string }>;
+  addClass: (classData: Omit<Class, 'id' | 'created_at' | 'updated_at'>) => Promise<{ success: boolean; data?: Class; error?: string }>;
 }
 
 const AddClass: React.FC<AddClassProps> = ({ isOpen, onClose, programId, programs, teachers, addClass }) => {
@@ -16,7 +16,7 @@ const AddClass: React.FC<AddClassProps> = ({ isOpen, onClose, programId, program
     name: '',
     program_id: programId || 0,
     description: '',
-    max_students: 20,
+    max_capacity: 20,
     status: 'active',
     teacher_id: null as number | null
   });
@@ -45,14 +45,16 @@ const AddClass: React.FC<AddClassProps> = ({ isOpen, onClose, programId, program
     setLoading(true);
     setError(null);
 
-         try {
-       // Generate a unique ID for the class
-       const classId = `${formData.program_id}-${Date.now()}`;
-       
-       const result = await addClass({
-         id: classId,
-         ...formData
-       });
+    try {
+      // Don't generate ID - let the database handle it
+      const result = await addClass({
+        name: formData.name,
+        program_id: formData.program_id,
+        description: formData.description,
+        max_capacity: formData.max_capacity,
+        status: formData.status,
+        teacher_id: formData.teacher_id
+      });
 
       if (result.success) {
         // Local state is already updated in the hook
@@ -62,7 +64,7 @@ const AddClass: React.FC<AddClassProps> = ({ isOpen, onClose, programId, program
           name: '',
           program_id: programId || 0,
           description: '',
-          max_students: 20,
+          max_capacity: 20,
           status: 'active',
           teacher_id: null
         });
@@ -80,7 +82,7 @@ const AddClass: React.FC<AddClassProps> = ({ isOpen, onClose, programId, program
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'max_students' ? parseInt(value) || 20 : value
+      [name]: name === 'max_capacity' ? parseInt(value) || 20 : value
     }));
   };
 
@@ -165,14 +167,14 @@ const AddClass: React.FC<AddClassProps> = ({ isOpen, onClose, programId, program
           </div>
 
           <div>
-            <label htmlFor="max_students" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="max_capacity" className="block text-sm font-medium text-gray-700 mb-2">
               Maximum Students
             </label>
             <input
               type="number"
-              id="max_students"
-              name="max_students"
-              value={formData.max_students}
+              id="max_capacity"
+              name="max_capacity"
+              value={formData.max_capacity}
               onChange={handleInputChange}
               min="1"
               max="50"
@@ -214,7 +216,7 @@ const AddClass: React.FC<AddClassProps> = ({ isOpen, onClose, programId, program
               <option value="">No teacher assigned</option>
               {teachers.map((teacher) => (
                 <option key={teacher.id} value={teacher.id}>
-                  {teacher.first_name} {teacher.last_name} ({teacher.email})
+                  {teacher.first_name} {teacher.last_name}
                 </option>
               ))}
             </select>

@@ -30,22 +30,36 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
     setSelectedAttendanceRecord(null);
   };
 
-  // Sample data - in a real app this would come from props or API
+  // Transform student data from Supabase to display format
   const studentDetails = {
     ...student,
-    parentName: 'Jennifer Rodriguez',
-    parentPhone: '(555) 123-4567',
-    parentEmail: 'jennifer.rodriguez@email.com',
-    dateOfBirth: '2016-03-15',
-    address: '123 Main Street, City, State 12345',
-    emergencyContact: 'Maria Rodriguez',
-    emergencyPhone: '(555) 987-6543',
-    medicalConditions: 'Speech delay, requires additional support',
-    allergies: 'None known',
-    enrollmentDate: '2023-09-01',
-    className: 'Grade 2A',
-    teacher: 'Ms. Emily Smith',
-    status: student.status || 'active'
+    // Basic info
+    name: student.name || 'Unknown',
+    age: student.date_of_birth ? Math.floor((new Date().getTime() - new Date(student.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : 'Unknown',
+    dateOfBirth: student.date_of_birth || 'Not provided', // Keep as raw date string for parsing
+    enrollmentDate: student.enrollment_date || 'Not provided', // Keep as raw date string for parsing
+    status: student.status || 'active',
+    
+    // Contact info (using the actual stored data)
+    parentPhone: student.phone || 'Not provided',
+    parentEmail: student.email || 'Not provided',
+    
+    // Program info
+    programName: student.programName || (student.program_id ? `Program ID: ${student.program_id}` : 'Not assigned'),
+    
+    // Use actual stored data from database
+    address: student.address || 'Not provided',
+    emergencyContact: student.emergency_contact || 'Not provided',
+    emergencyPhone: student.emergency_phone || 'Not provided',
+    medicalConditions: student.medical_conditions || 'None known',
+    allergies: student.allergies || 'None known',
+    className: student.class_name || 'Not assigned',
+    teacher: student.teacher || 'Not assigned',
+    
+    // Default values for missing fields
+    assessments: 0,
+    notes: 0,
+    avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`
   };
 
   const attendanceData = [
@@ -258,11 +272,15 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
                   </div>
                   <div>
                     <label className="text-sm text-gray-600">Date of Birth</label>
-                    <p className="font-medium text-gray-900">{new Date(studentDetails.dateOfBirth).toLocaleDateString()}</p>
+                    <p className="font-medium text-gray-900">
+                      {studentDetails.dateOfBirth !== 'Not provided' ? new Date(studentDetails.dateOfBirth).toLocaleDateString() : 'Not provided'}
+                    </p>
                   </div>
                   <div>
                     <label className="text-sm text-gray-600">Enrollment Date</label>
-                    <p className="font-medium text-gray-900">{new Date(studentDetails.enrollmentDate).toLocaleDateString()}</p>
+                    <p className="font-medium text-gray-900">
+                      {studentDetails.enrollmentDate !== 'Not provided' ? new Date(studentDetails.enrollmentDate).toLocaleDateString() : 'Not provided'}
+                    </p>
                   </div>
                   <div>
                     <label className="text-sm text-gray-600">Class</label>
@@ -288,8 +306,8 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
                 <h4 className="font-medium text-gray-900 mb-3">Contact Information</h4>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-sm text-gray-600">Parent/Guardian</label>
-                    <p className="font-medium text-gray-900">{studentDetails.parentName}</p>
+                    <label className="text-sm text-gray-600">Parent/Guardian Name</label>
+                    <p className="font-medium text-gray-900">{student.parent_name || 'Not provided'}</p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Phone className="w-4 h-4 text-gray-400" />
@@ -332,7 +350,7 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
               }`}>
                 <p className="font-medium text-blue-900">{studentDetails.programName}</p>
                 <p className="text-sm text-blue-700 mt-1">
-                  Enrolled since {new Date(studentDetails.enrollmentDate).toLocaleDateString()}
+                  Enrolled since {studentDetails.enrollmentDate !== 'Not provided' ? new Date(studentDetails.enrollmentDate).toLocaleDateString() : 'Not provided'}
                 </p>
                 {studentDetails.status === 'inactive' && (
                   <p className="text-sm text-red-700 mt-1 font-medium">

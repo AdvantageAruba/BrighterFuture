@@ -5,6 +5,7 @@ export const useClasses = () => {
   const [classes, setClasses] = useState<Class[]>([])
   const [programs, setPrograms] = useState<Program[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
+  const [students, setStudents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -45,13 +46,14 @@ export const useClasses = () => {
     }
   }
 
-  // Fetch all teachers
+  // Fetch all teachers from the users table (users with teacher role)
   const fetchTeachers = async () => {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, first_name, last_name')
+        .select('id, first_name, last_name, email, department, status')
         .eq('role', 'teacher')
+        .eq('status', 'active')
         .order('first_name')
 
       if (error) throw error
@@ -59,6 +61,22 @@ export const useClasses = () => {
       setTeachers(data || [])
     } catch (err) {
       console.error('Failed to fetch teachers:', err)
+    }
+  }
+
+  // Fetch all students
+  const fetchStudents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, name, program_id, class_id')
+        .order('name')
+
+      if (error) throw error
+      
+      setStudents(data || [])
+    } catch (err) {
+      console.error('Failed to fetch students:', err)
     }
   }
 
@@ -80,7 +98,7 @@ export const useClasses = () => {
   }
 
   // Add new class
-  const addClass = async (classData: Omit<Class, 'created_at' | 'updated_at'>) => {
+  const addClass = async (classData: Omit<Class, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       const { data, error } = await supabase
         .from('classes')
@@ -107,7 +125,7 @@ export const useClasses = () => {
   }
 
   // Update class
-  const updateClass = async (id: string, updates: Partial<Class>) => {
+  const updateClass = async (id: number, updates: Partial<Class>) => {
     try {
       const { data, error } = await supabase
         .from('classes')
@@ -137,7 +155,7 @@ export const useClasses = () => {
   }
 
   // Delete class
-  const deleteClass = async (id: string) => {
+  const deleteClass = async (id: number) => {
     try {
       const { error } = await supabase
         .from('classes')
@@ -174,6 +192,16 @@ export const useClasses = () => {
     return teacher ? `${teacher.first_name} ${teacher.last_name}` : 'Unknown Teacher'
   }
 
+  // Get student count by program
+  const getStudentCountByProgram = (programId: number) => {
+    return students.filter(s => s.program_id === programId).length
+  }
+
+  // Get total student count across all programs
+  const getTotalStudentCount = () => {
+    return students.length
+  }
+
   // Refresh all data
   const refreshClasses = () => {
     fetchClasses()
@@ -184,35 +212,41 @@ export const useClasses = () => {
     fetchClasses()
     fetchPrograms()
     fetchTeachers()
+    fetchStudents()
   }, [])
 
   return {
     classes,
     programs,
     teachers,
+    students,
     loading,
     error,
     getClassesByProgram,
     getClassCountByProgram,
     getTeacherName,
+    getStudentCountByProgram,
+    getTotalStudentCount,
     addClass,
     updateClass,
     deleteClass,
     refreshClasses,
     refreshPrograms: fetchPrograms,
-    refreshTeachers: fetchTeachers
+    refreshTeachers: fetchTeachers,
+    refreshStudents: fetchStudents
   }
 }
 
-// Types
+// Types - Updated to match database schema
 export interface Class {
-  id: string
+  id: number
   name: string
   program_id: number
-  description: string
-  max_students: number
-  status: string
   teacher_id?: number | null
+  max_capacity: number
+  current_enrollment: number
+  status: string
+  description: string
   created_at: string
   updated_at: string
 }
@@ -230,4 +264,7 @@ export interface Teacher {
   id: number
   first_name: string
   last_name: string
+  email: string
+  department?: string
+  status: string
 }
