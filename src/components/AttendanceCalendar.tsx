@@ -71,8 +71,27 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ isOpen, onClose
       date.setDate(startDate.getDate() + i);
       const dateStr = date.toISOString().split('T')[0];
       
-      // Get attendance data for this date
-      const dayAttendance = filteredAttendance.filter(r => r.date === dateStr);
+      // Get attendance data for this date - use a more robust date comparison
+      const dayAttendance = filteredAttendance.filter(r => {
+        // Handle different possible date formats from the database
+        let recordDate = r.date;
+        
+        // If the date is already in YYYY-MM-DD format, use it directly
+        if (typeof recordDate === 'string' && recordDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          return recordDate === dateStr;
+        }
+        
+        // If it's a date object or has timezone info, normalize it
+        try {
+          const parsedDate = new Date(recordDate);
+          const normalizedDate = parsedDate.toISOString().split('T')[0];
+          return normalizedDate === dateStr;
+        } catch (error) {
+          console.warn('Failed to parse date:', recordDate);
+          return false;
+        }
+      });
+      
       const presentCount = dayAttendance.filter(r => r.status === 'present').length;
       const absentCount = dayAttendance.filter(r => r.status === 'absent').length;
       const lateCount = dayAttendance.filter(r => r.status === 'late').length;
@@ -112,6 +131,8 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ isOpen, onClose
 
   // Handle date selection
   const handleDateClick = (date: string) => {
+    console.log('Selected date:', date);
+    console.log('Available attendance dates:', filteredAttendance.map(r => r.date));
     setSelectedDate(date);
   };
 
@@ -119,7 +140,37 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ isOpen, onClose
   const selectedDateSummary = useMemo(() => {
     if (!selectedDate) return null;
     
-    const dayAttendance = filteredAttendance.filter(r => r.date === selectedDate);
+    console.log('Calculating summary for date:', selectedDate);
+    
+    // Use the same robust date comparison for selected date summary
+    const dayAttendance = filteredAttendance.filter(r => {
+      // Handle different possible date formats from the database
+      let recordDate = r.date;
+      
+      console.log('Comparing record date:', recordDate, 'with selected date:', selectedDate);
+      
+      // If the date is already in YYYY-MM-DD format, use it directly
+      if (typeof recordDate === 'string' && recordDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const matches = recordDate === selectedDate;
+        console.log('Direct string comparison:', matches);
+        return matches;
+      }
+      
+      // If it's a date object or has timezone info, normalize it
+      try {
+        const parsedDate = new Date(recordDate);
+        const normalizedDate = parsedDate.toISOString().split('T')[0];
+        const matches = normalizedDate === selectedDate;
+        console.log('Normalized comparison:', normalizedDate, 'vs', selectedDate, '=', matches);
+        return matches;
+      } catch (error) {
+        console.warn('Failed to parse date:', recordDate);
+        return false;
+      }
+    });
+    
+    console.log('Matched attendance records:', dayAttendance.length);
+    
     const presentCount = dayAttendance.filter(r => r.status === 'present').length;
     const absentCount = dayAttendance.filter(r => r.status === 'absent').length;
     const lateCount = dayAttendance.filter(r => r.status === 'late').length;

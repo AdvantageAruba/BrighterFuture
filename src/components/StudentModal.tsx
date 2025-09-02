@@ -22,6 +22,8 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
   // New state for managing modals
   const [isEditAttendanceOpen, setIsEditAttendanceOpen] = useState(false);
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
+  const [selectedStartDate, setSelectedStartDate] = useState<string>('');
+  const [selectedEndDate, setSelectedEndDate] = useState<string>('');
   
   const { attendance, loading: attendanceLoading, error: attendanceError, getAttendanceByStudent } = useAttendance();
   
@@ -34,6 +36,63 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
   const absentDays = studentAttendanceData.filter(r => r.status === 'absent').length;
   const lateDays = studentAttendanceData.filter(r => r.status === 'late').length;
   const attendanceRate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+
+  // Calculate current week's date range
+  const getCurrentWeekRange = () => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const endOfWeek = new Date(now);
+    endOfWeek.setDate(now.getDate() + (6 - now.getDay())); // End of week (Saturday)
+    endOfWeek.setHours(23, 59, 59, 999);
+    
+    return { startOfWeek, endOfWeek };
+  };
+
+  // Get filtered attendance statistics for the selected date range
+  const getFilteredAttendanceStats = () => {
+    let startDate: Date, endDate: Date;
+    
+    if (selectedStartDate && selectedEndDate) {
+      // Use custom date range
+      startDate = new Date(selectedStartDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(selectedEndDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      // Use current week
+      const { startOfWeek, endOfWeek } = getCurrentWeekRange();
+      startDate = startOfWeek;
+      endDate = endOfWeek;
+    }
+    
+    // Filter attendance records for this student within the selected date range
+    const filteredAttendance = studentAttendanceData.filter(record => {
+      const recordDate = new Date(record.date);
+      return recordDate >= startDate && recordDate <= endDate;
+    });
+
+    const presentDays = filteredAttendance.filter(r => r.status === 'present').length;
+    const lateDays = filteredAttendance.filter(r => r.status === 'late').length;
+    const absentDays = filteredAttendance.filter(r => r.status === 'absent').length;
+    const totalDays = filteredAttendance.length;
+
+    return { presentDays, lateDays, absentDays, totalDays };
+  };
+
+  // Format date range for display
+  const getDateRangeDisplay = () => {
+    if (selectedStartDate && selectedEndDate) {
+      const start = new Date(selectedStartDate);
+      const end = new Date(selectedEndDate);
+      return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    } else {
+      const { startOfWeek, endOfWeek } = getCurrentWeekRange();
+      return `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+  };
 
   const handleBackToTabs = () => {
     setDetailView(null);
@@ -49,6 +108,7 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
     // Basic info
     name: student.name || 'Unknown',
     age: student.date_of_birth ? Math.floor((new Date().getTime() - new Date(student.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : 'Unknown',
+    gender: student.gender || 'Not specified',
     dateOfBirth: student.date_of_birth || 'Not provided', // Keep as raw date string for parsing
     enrollmentDate: student.enrollment_date || 'Not provided', // Keep as raw date string for parsing
     status: student.status || 'active',
@@ -276,6 +336,12 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
                     <p className="font-medium text-gray-900">{studentDetails.age} years old</p>
                   </div>
                   <div>
+                    <label className="text-sm text-gray-600">Gender</label>
+                    <p className="font-medium text-gray-900">
+                      {studentDetails.gender !== 'Not specified' ? studentDetails.gender.charAt(0).toUpperCase() + studentDetails.gender.slice(1) : 'Not specified'}
+                    </p>
+                  </div>
+                  <div>
                     <label className="text-sm text-gray-600">Date of Birth</label>
                     <p className="font-medium text-gray-900">
                       {studentDetails.dateOfBirth !== 'Not provided' ? new Date(studentDetails.dateOfBirth).toLocaleDateString() : 'Not provided'}
@@ -379,56 +445,109 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
               </div>
             </div>
 
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Quick Stats</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-green-50 p-3 rounded-lg text-center">
-                  <p className="text-2xl font-bold text-green-600">85%</p>
-                  <p className="text-sm text-green-700">Attendance Rate</p>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-lg text-center">
-                  <p className="text-2xl font-bold text-blue-600">{studentDetails.assessments}</p>
-                  <p className="text-sm text-blue-700">Assessments</p>
-                </div>
-                <div className="bg-purple-50 p-3 rounded-lg text-center">
-                  <p className="text-2xl font-bold text-purple-600">{studentDetails.notes}</p>
-                  <p className="text-sm text-purple-700">Daily Notes</p>
-                </div>
-                <div className="bg-orange-50 p-3 rounded-lg text-center">
-                  <p className="text-2xl font-bold text-orange-600">4</p>
-                  <p className="text-sm text-orange-700">Active Forms</p>
-                </div>
-              </div>
-            </div>
+                         <div>
+               <h4 className="font-medium text-gray-900 mb-3">Quick Stats</h4>
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                 <div className="bg-green-50 p-3 rounded-lg text-center">
+                   <p className="text-2xl font-bold text-green-600">{attendanceRate}%</p>
+                   <p className="text-sm text-green-700">Attendance Rate</p>
+                   <p className="text-xs text-green-600 mt-1">{totalDays} total days</p>
+                 </div>
+                 <div className="bg-blue-50 p-3 rounded-lg text-center">
+                   <p className="text-2xl font-bold text-blue-600">{assessmentData.length}</p>
+                   <p className="text-sm text-blue-700">Assessments</p>
+                   <p className="text-xs text-blue-600 mt-1">{assessmentData.filter(a => a.status === 'completed').length} completed</p>
+                 </div>
+                 <div className="bg-purple-50 p-3 rounded-lg text-center">
+                   <p className="text-2xl font-bold text-purple-600">{notesData.length}</p>
+                   <p className="text-sm text-purple-700">Daily Notes</p>
+                   <p className="text-xs text-purple-600 mt-1">Last 30 days</p>
+                 </div>
+                 <div className="bg-orange-50 p-3 rounded-lg text-center">
+                   <p className="text-2xl font-bold text-orange-600">{formsData.length}</p>
+                   <p className="text-sm text-orange-700">Active Forms</p>
+                   <p className="text-xs text-orange-600 mt-1">{formsData.filter(f => f.status === 'completed').length} completed</p>
+                 </div>
+               </div>
+             </div>
           </div>
         );
       case 'attendance':
+        const filteredStats = getFilteredAttendanceStats();
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-medium text-gray-900">Recent Attendance</h4>
-              <p className="text-sm text-gray-600 mb-4">
-                Attendance Rate: <span className="font-medium text-green-600">{attendanceRate}%</span>
+              <h4 className="font-medium text-gray-900">Attendance Summary</h4>
+              <p className="text-sm text-gray-600">
+                {getDateRangeDisplay()}
               </p>
             </div>
+            
+            {/* Date Filter */}
+            <div className="mb-4 flex items-center space-x-4">
+              <div className="text-sm text-gray-600">
+                Filter by date range:
+              </div>
+              <div className="flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  placeholder="Start Date"
+                  value={selectedStartDate}
+                  onChange={(e) => setSelectedStartDate(e.target.value)}
+                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                />
+                <span className="text-gray-400">to</span>
+                <input
+                  type="date"
+                  placeholder="End Date"
+                  value={selectedEndDate}
+                  onChange={(e) => setSelectedEndDate(e.target.value)}
+                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                />
+                {(selectedStartDate || selectedEndDate) && (
+                  <button
+                    onClick={() => {
+                      setSelectedStartDate('');
+                      setSelectedEndDate('');
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-green-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-green-600">{presentDays}</div>
+                <div className="text-2xl font-bold text-green-600">{filteredStats.presentDays}</div>
                 <div className="text-sm text-green-700">Present Days</div>
               </div>
               <div className="bg-red-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-red-600">{absentDays}</div>
+                <div className="text-2xl font-bold text-red-600">{filteredStats.absentDays}</div>
                 <div className="text-sm text-red-700">Absent Days</div>
               </div>
               <div className="bg-orange-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-orange-600">{lateDays}</div>
+                <div className="text-2xl font-bold text-orange-600">{filteredStats.lateDays}</div>
                 <div className="text-sm text-orange-700">Late Days</div>
               </div>
             </div>
+
+            {/* Overall Attendance Rate */}
+            <div className="bg-blue-50 rounded-lg p-4 mb-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-2">Overall Attendance Rate</p>
+                <p className="text-3xl font-bold text-blue-600">{attendanceRate}%</p>
+                <p className="text-sm text-blue-700">{totalDays} total days recorded</p>
+              </div>
+            </div>
+
+            <h5 className="font-medium text-gray-900 mb-3">Recent Attendance Records</h5>
             {studentAttendanceData.map((record, index) => (
               <div 
                 key={index} 
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 hover:shadow-sm transition-all duration-200"
+                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 hover:shadow-sm transition-all duration-200 mb-2"
                 onClick={() => {
                   setSelectedAttendanceRecord(record);
                   setDetailView('attendance');
@@ -920,37 +1039,22 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
                   </div>
                 )}
 
-                {/* Notes */}
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                    <MessageSquare className="w-5 h-5" />
-                    <span>Notes</span>
-                  </h4>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    {selectedAttendanceRecord?.notes ? (
-                      <p className="text-gray-700">{selectedAttendanceRecord.notes}</p>
-                    ) : (
-                      <p className="text-gray-500 italic">No additional notes for this attendance record.</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h4>
-                  <div className="flex flex-wrap gap-3">
-                    <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
-                      <Edit className="w-4 h-4" />
-                      <span>Edit Attendance</span>
-                    </button>
-                    <button className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200">
-                      <MessageSquare className="w-4 h-4" />
-                      <span>Add Note</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+                                 {/* Notes */}
+                 <div>
+                   <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                     <MessageSquare className="w-5 h-5" />
+                     <span>Notes</span>
+                   </h4>
+                   <div className="bg-gray-50 rounded-lg p-4">
+                     {selectedAttendanceRecord?.notes ? (
+                       <p className="text-gray-700">{selectedAttendanceRecord.notes}</p>
+                     ) : (
+                       <p className="text-gray-500 italic">No additional notes for this attendance record.</p>
+                     )}
+                   </div>
+                 </div>
+               </div>
+             </div>
           </div>
         );
       default:

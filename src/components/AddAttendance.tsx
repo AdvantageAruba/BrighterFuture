@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Save, Calendar, Users, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { useStudents } from '../hooks/useStudents';
 import { useAttendance } from '../hooks/useAttendance';
@@ -47,17 +47,19 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
   }));
 
   // Students organized by program using real data
-  const studentsByProgram = supabasePrograms.reduce((acc, program) => {
-    const programStudents = supabaseStudents.filter(student => student.program_id === program.id);
-    acc[program.id.toString()] = programStudents.map(student => ({
-      id: student.id,
-      name: student.name,
-      age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
-      class: student.class_id ? realClasses.find(c => c.id === student.class_id)?.name || 'Unassigned' : 'Unassigned',
-      classId: student.class_id || null
-    }));
-    return acc;
-  }, {} as Record<string, any[]>);
+  const studentsByProgram = useMemo(() => {
+    return supabasePrograms.reduce((acc, program) => {
+      const programStudents = supabaseStudents.filter(student => student.program_id === program.id);
+      acc[program.id.toString()] = programStudents.map(student => ({
+        id: student.id,
+        name: student.name,
+        age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
+        class: student.class_id ? realClasses.find(c => c.id === student.class_id)?.name || 'Unassigned' : 'Unassigned',
+        classId: student.class_id || null
+      }));
+      return acc;
+    }, {} as Record<string, any[]>);
+  }, [supabasePrograms, supabaseStudents, realClasses]);
 
   // Pre-populate form when editing existing record
   useEffect(() => {
@@ -93,11 +95,51 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
     }
   }, [existingRecord, studentId, studentsByProgram]);
 
+  // Pre-populate form when studentId is provided for new attendance entry
+  useEffect(() => {
+    if (studentId && !existingRecord && Object.keys(studentsByProgram).length > 0) {
+      // Find the student's program and class based on the student ID
+      let studentProgram = '';
+      let studentClass = '';
+      
+      for (const [program, students] of Object.entries(studentsByProgram)) {
+        const student = students.find((s: any) => s.id === studentId);
+        if (student) {
+          studentProgram = program;
+          studentClass = student.classId;
+          break;
+        }
+      }
+      
+      setFormData({
+        date: selectedDate || new Date().toISOString().split('T')[0],
+        program: studentProgram,
+        class: studentClass,
+        notes: ''
+      });
+      
+      // Initialize attendance for this specific student
+      setStudentAttendance({
+        [studentId]: {
+          status: 'present', // Default to present
+          checkIn: '08:30',  // Default check-in time
+          checkOut: '15:00', // Default check-out time
+          notes: ''
+        }
+      });
+    }
+  }, [studentId, existingRecord, studentsByProgram, selectedDate]);
+
   if (!isOpen) return null;
 
   const getAvailableStudents = () => {
     if (!formData.program) return [];
     const programStudents = studentsByProgram[formData.program as keyof typeof studentsByProgram] || [];
+    
+    // If studentId is provided, only return that specific student
+    if (studentId) {
+      return programStudents.filter(student => student.id === studentId);
+    }
     
     if (!formData.class) return programStudents;
     
@@ -134,8 +176,14 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
 
   // Initialize student attendance when program/class changes
   useEffect(() => {
-    if (formData.program && !existingRecord) {
-      const availableStudents = getAvailableStudents();
+    if (formData.program && !existingRecord && !studentId) {
+      const programStudents = studentsByProgram[formData.program as keyof typeof studentsByProgram] || [];
+      let availableStudents = programStudents;
+      
+      if (formData.class) {
+        availableStudents = programStudents.filter(student => student.classId?.toString() === formData.class);
+      }
+      
       if (availableStudents.length > 0) {
         const initialAttendance = availableStudents.reduce((acc, student) => {
           acc[student.id] = {
@@ -149,7 +197,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
         setStudentAttendance(initialAttendance);
       }
     }
-  }, [formData.program, formData.class, existingRecord]);
+  }, [formData.program, formData.class, existingRecord, studentId, studentsByProgram]);
 
   const handleStudentAttendanceChange = (studentId: number, field: string, value: string) => {
     setStudentAttendance(prev => ({
@@ -320,7 +368,8 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
                     value={formData.program}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={!!studentId}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Select program...</option>
                     {programs.map((program) => (
@@ -336,7 +385,7 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
                     name="class"
                     value={formData.class}
                     onChange={handleInputChange}
-                    disabled={!formData.program}
+                    disabled={!formData.program || !!studentId}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">

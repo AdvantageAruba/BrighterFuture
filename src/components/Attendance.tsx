@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Calendar, CheckCircle, XCircle, Clock, Users, Download, BarChart3, PieChart, Plus } from 'lucide-react';
+import { Search, Filter, CheckCircle, XCircle, Clock, Users, Download, BarChart3, PieChart, Plus } from 'lucide-react';
 import StudentModal from './StudentModal';
 import AddAttendance from './AddAttendance';
 import AttendanceDetails from './AttendanceDetails';
 import AttendanceReports from './AttendanceReports';
 import BulkAttendance from './BulkAttendance';
-import AttendanceCalendar from './AttendanceCalendar';
 import { useStudents } from '../hooks/useStudents';
 import { useClasses } from '../hooks/useClasses';
 import { useAttendance } from '../hooks/useAttendance';
@@ -22,12 +21,11 @@ const Attendance: React.FC = () => {
   const [isAttendanceDetailsOpen, setIsAttendanceDetailsOpen] = useState(false);
   const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isBulkAttendanceOpen, setIsBulkAttendanceOpen] = useState(false);
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   // Get real data from hooks
   const { programs: realPrograms, students } = useStudents();
   const { classes } = useClasses();
-  const { attendance, loading } = useAttendance();
+  const { attendance, loading, refreshAttendance } = useAttendance();
 
   // Add "All Programs" option to real programs
   const programs = [
@@ -153,13 +151,6 @@ const Attendance: React.FC = () => {
         </div>
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => setIsCalendarOpen(true)}
-            className="flex items-center space-x-2 bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 transition-colors duration-200 min-w-[140px] justify-center"
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Calendar View</span>
-          </button>
-          <button
             onClick={() => setIsReportsOpen(true)}
             className="flex items-center space-x-2 bg-violet-500 text-white px-4 py-2 rounded-lg hover:bg-violet-600 transition-colors duration-200 min-w-[140px] justify-center"
           >
@@ -249,7 +240,7 @@ const Attendance: React.FC = () => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
           <div className="flex items-center space-x-2">
-            <Calendar className="w-5 h-5 text-gray-400" />
+            <Clock className="w-5 h-5 text-gray-400" />
             <input
               type="date"
               value={selectedDate}
@@ -357,6 +348,7 @@ const Attendance: React.FC = () => {
                 if (realRecord) {
                   // Use real attendance record
                   const attendanceRecord = {
+                    id: realRecord.id,
                     date: realRecord.date,
                     status: realRecord.status,
                     checkIn: realRecord.check_in,
@@ -367,9 +359,9 @@ const Attendance: React.FC = () => {
                   setSelectedAttendanceRecord(attendanceRecord);
                   setIsAttendanceDetailsOpen(true);
                 } else {
-                  // No attendance recorded yet - show student modal instead
+                  // No attendance recorded yet - open AddAttendance for this student
                   setSelectedStudent(student);
-                  setIsModalOpen(true);
+                  setIsAddAttendanceOpen(true);
                 }
               }}
             >
@@ -417,9 +409,10 @@ const Attendance: React.FC = () => {
           isOpen={isAddAttendanceOpen}
           onClose={() => setIsAddAttendanceOpen(false)}
           selectedDate={selectedDate}
-          onAttendanceAdded={() => {
-            // This will trigger a re-render and update the attendance data
-            // The useMemo hooks will automatically recalculate with new data
+          studentId={selectedStudent?.id}
+          onAttendanceAdded={async () => {
+            // Refresh attendance data to show the new record
+            await refreshAttendance();
           }}
         />
       )}
@@ -445,17 +438,10 @@ const Attendance: React.FC = () => {
         <BulkAttendance
           isOpen={isBulkAttendanceOpen}
           onClose={() => setIsBulkAttendanceOpen(false)}
-          onAttendanceAdded={() => {
-            // This will trigger a re-render and update the attendance data
-            // The useMemo hooks will automatically recalculate with new data
+          onAttendanceAdded={async () => {
+            // Refresh attendance data to show the new records
+            await refreshAttendance();
           }}
-        />
-      )}
-
-      {isCalendarOpen && (
-        <AttendanceCalendar
-          isOpen={isCalendarOpen}
-          onClose={() => setIsCalendarOpen(false)}
         />
       )}
     </div>

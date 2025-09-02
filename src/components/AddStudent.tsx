@@ -101,8 +101,8 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
     
     try {
       // Validate required fields
-      if (!formData.firstName || !formData.lastName || !formData.dateOfBirth || !formData.gender || !formData.program) {
-        alert('Please fill in all required fields');
+      if (!formData.firstName || !formData.lastName || !formData.dateOfBirth || !formData.gender || !formData.program || !formData.emergencyContact || !formData.emergencyPhone) {
+        alert('Please fill in all required fields including emergency contact information');
         setIsSubmitting(false);
         return;
       }
@@ -384,22 +384,24 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Contact Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Contact Name *</label>
                 <input
                   type="text"
                   name="emergencyContact"
                   value={formData.emergencyContact}
                   onChange={handleInputChange}
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Phone Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Phone Number *</label>
                 <input
                   type="tel"
                   name="emergencyPhone"
                   value={formData.emergencyPhone}
                   onChange={handleInputChange}
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
