@@ -423,6 +423,10 @@ const Attendance: React.FC = () => {
           attendanceRecord={selectedAttendanceRecord}
           isOpen={isAttendanceDetailsOpen}
           onClose={() => setIsAttendanceDetailsOpen(false)}
+          onAttendanceDeleted={async () => {
+            // Refresh attendance data to show the updated status
+            await refreshAttendance();
+          }}
         />
       )}
 

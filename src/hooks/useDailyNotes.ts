@@ -4,11 +4,28 @@ import { supabase } from '../lib/supabase'
 export interface DailyNote {
   id: number
   student_id: number
+  student_name: string
   program_id: number
+  program_name: string
+  author_id: string
+  author_name: string
   date: string
-  notes: string
-  created_by: string
+  notes: string  // Changed from note_content to notes
+  tags: string[]
   created_at: string
+  updated_at: string
+}
+
+export interface AddDailyNoteData {
+  student_id: number
+  student_name: string
+  program_id: number
+  program_name: string
+  author_id: string
+  author_name: string
+  date: string
+  notes: string  // Changed from note_content to notes
+  tags: string[]
 }
 
 export const useDailyNotes = () => {
@@ -22,19 +39,8 @@ export const useDailyNotes = () => {
       setLoading(true)
       const { data, error } = await supabase
         .from('daily_notes')
-        .select(`
-          *,
-          students (
-            id,
-            name,
-            email
-          ),
-          programs (
-            id,
-            name
-          )
-        `)
-        .order('date', { ascending: false })
+        .select('*')
+        .order('created_at', { ascending: false })
 
       if (error) throw error
       setDailyNotes(data || [])
@@ -46,7 +52,7 @@ export const useDailyNotes = () => {
   }
 
   // Add new daily note
-  const addDailyNote = async (noteData: Omit<DailyNote, 'id' | 'created_at'>) => {
+  const addDailyNote = async (noteData: AddDailyNoteData) => {
     try {
       const { data, error } = await supabase
         .from('daily_notes')
@@ -61,8 +67,9 @@ export const useDailyNotes = () => {
       
       return { success: true, data: data?.[0] }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add daily note')
-      return { success: false, error: err instanceof Error ? err.message : 'Failed to add daily note' }
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add daily note'
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
     }
   }
 
@@ -108,26 +115,50 @@ export const useDailyNotes = () => {
     }
   }
 
-  // Get notes by student
-  const getNotesByStudent = (studentId: number) => {
-    return dailyNotes.filter(note => note.student_id === studentId)
-  }
-
-  // Get notes by program
-  const getNotesByProgram = (programId: number) => {
-    return dailyNotes.filter(note => note.program_id === programId)
-  }
-
-  // Get notes by date
-  const getNotesByDate = (date: string) => {
+  // Get daily notes by date
+  const getDailyNotesByDate = (date: string) => {
     return dailyNotes.filter(note => note.date === date)
   }
 
-  // Get notes by date range
-  const getNotesByDateRange = (startDate: string, endDate: string) => {
+  // Get daily notes by program
+  const getDailyNotesByProgram = (programId: number) => {
+    return dailyNotes.filter(note => note.program_id === programId)
+  }
+
+  // Get daily notes by student
+  const getDailyNotesByStudent = (studentId: number) => {
+    return dailyNotes.filter(note => note.student_id === studentId)
+  }
+
+  // Search daily notes
+  const searchDailyNotes = (searchTerm: string) => {
+    const term = searchTerm.toLowerCase()
     return dailyNotes.filter(note => 
-      note.date >= startDate && note.date <= endDate
+      note.student_name.toLowerCase().includes(term) ||
+      note.notes.toLowerCase().includes(term) ||
+      note.author_name.toLowerCase().includes(term) ||
+      note.tags.some(tag => tag.toLowerCase().includes(term))
     )
+  }
+
+  // Get daily notes statistics
+  const getDailyNotesStats = () => {
+    const total = dailyNotes.length
+    const byProgram = dailyNotes.reduce((acc, note) => {
+      acc[note.program_name] = (acc[note.program_name] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+
+    const byDate = dailyNotes.reduce((acc, note) => {
+      acc[note.date] = (acc[note.date] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+
+    return {
+      total,
+      byProgram,
+      byDate
+    }
   }
 
   useEffect(() => {
@@ -141,10 +172,11 @@ export const useDailyNotes = () => {
     addDailyNote,
     updateDailyNote,
     deleteDailyNote,
-    getNotesByStudent,
-    getNotesByProgram,
-    getNotesByDate,
-    getNotesByDateRange,
+    getDailyNotesByDate,
+    getDailyNotesByProgram,
+    getDailyNotesByStudent,
+    searchDailyNotes,
+    getDailyNotesStats,
     refreshDailyNotes: fetchDailyNotes
   }
 }

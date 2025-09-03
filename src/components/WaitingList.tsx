@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { Search, Plus, Phone, Mail, Calendar, User, Clock, ArrowRight } from 'lucide-react';
-import IntakeForm from './IntakeForm';
+import { Search, Plus, Phone, Mail, Calendar, User, Clock, ArrowRight, Trash2 } from 'lucide-react';
 import AddToWaitingList from './AddToWaitingList';
+import AddStudent from './AddStudent';
+import { useWaitingList } from '../hooks/useWaitingList';
 
 const WaitingList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [isIntakeFormOpen, setIsIntakeFormOpen] = useState(false);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  const [isEnrollFormOpen, setIsEnrollFormOpen] = useState(false);
+
+  // Use real data from database
+  const { waitingList, loading, error, refreshWaitingList, deleteWaitingListEntry } = useWaitingList();
 
   const programs = [
     { id: 'all', name: 'All Programs' },
@@ -18,47 +22,20 @@ const WaitingList: React.FC = () => {
     { id: 'individual-therapy', name: 'Individual Therapy' }
   ];
 
-  const waitingListData = [
-    {
-      id: 1,
-      name: 'Sarah Williams',
-      age: 7,
-      program: 'academy',
-      programName: 'Brighter Future Academy',
-      dateAdded: '2024-01-10',
-      priority: 'high',
-      parentName: 'Jennifer Williams',
-      phone: '(555) 123-4567',
-      email: 'jennifer.williams@email.com',
-      notes: 'Requires immediate attention for speech therapy'
-    },
-    {
-      id: 2,
-      name: 'David Martinez',
-      age: 5,
-      program: 'first-steps',
-      programName: 'First Steps',
-      dateAdded: '2024-01-08',
-      priority: 'medium',
-      parentName: 'Maria Martinez',
-      phone: '(555) 234-5678',
-      email: 'maria.martinez@email.com',
-      notes: 'Early intervention needed'
-    },
-    {
-      id: 3,
-      name: 'Lily Johnson',
-      age: 9,
-      program: 'individual-therapy',
-      programName: 'Individual Therapy',
-      dateAdded: '2024-01-05',
-      priority: 'low',
-      parentName: 'Robert Johnson',
-      phone: '(555) 345-6789',
-      email: 'robert.johnson@email.com',
-      notes: 'Flexible scheduling available'
-    }
-  ];
+  // Transform database data for display
+  const waitingListData = waitingList.map(entry => ({
+    id: entry.id,
+    name: `${entry.first_name} ${entry.last_name}`,
+    age: entry.age || 'N/A',
+    program: entry.program,
+    programName: programs.find(p => p.id === entry.program)?.name || entry.program,
+    dateAdded: entry.created_at.split('T')[0], // Extract date part
+    priority: entry.priority,
+    parentName: entry.parent_name,
+    phone: entry.parent_phone,
+    email: entry.parent_email,
+    notes: entry.notes || entry.reason_for_waiting || 'No notes'
+  }));
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -87,12 +64,47 @@ const WaitingList: React.FC = () => {
   });
 
   const handleStudentClick = (student: any) => {
-    setSelectedStudent(student);
-    setIsIntakeFormOpen(true);
+    // Find the original database entry for this student
+    const originalEntry = waitingList.find(entry => entry.id === student.id);
+    setSelectedStudent(originalEntry);
+    setIsAddFormOpen(true);
   };
 
   const handleAddToWaitingList = () => {
+    setSelectedStudent(null); // Ensure no student is selected for new entry
     setIsAddFormOpen(true);
+  };
+
+  const handleEnrollStudent = (student: any, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    // Find the original database entry for this student
+    const originalEntry = waitingList.find(entry => entry.id === student.id);
+    setSelectedStudent(originalEntry);
+    setIsEnrollFormOpen(true);
+  };
+
+  const handleDeleteStudent = async (student: any, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Confirm deletion
+    if (!window.confirm(`Are you sure you want to remove ${student.name} from the waiting list?`)) {
+      return;
+    }
+    
+    try {
+      const result = await deleteWaitingListEntry(student.id);
+      if (result.success) {
+        console.log('Waiting list entry deleted successfully');
+        // The useWaitingList hook will automatically update the UI
+      } else {
+        alert(`Failed to delete entry: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting waiting list entry:', error);
+      alert('Failed to delete entry. Please try again.');
+    }
   };
 
   return (
@@ -137,12 +149,28 @@ const WaitingList: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          {filteredWaitingList.map((student) => (
-            <div 
-              key={student.id} 
-              className="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow duration-200 cursor-pointer hover:bg-gray-50"
-              onClick={() => handleStudentClick(student)}
-            >
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading waiting list...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-red-600">Error loading waiting list: {error}</p>
+            </div>
+          ) : filteredWaitingList.length === 0 ? (
+            <div className="text-center py-8">
+              <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No students found on the waiting list.</p>
+              <p className="text-sm text-gray-500 mt-1">Try adjusting the search or program filter.</p>
+            </div>
+          ) : (
+            filteredWaitingList.map((student) => (
+              <div 
+                key={student.id} 
+                className="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow duration-200 cursor-pointer hover:bg-gray-50"
+                onClick={() => handleStudentClick(student)}
+              >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
@@ -191,30 +219,82 @@ const WaitingList: React.FC = () => {
                   <Clock className="w-4 h-4" />
                   <span>Waiting for {Math.floor((new Date().getTime() - new Date(student.dateAdded).getTime()) / (1000 * 60 * 60 * 24))} days</span>
                 </div>
-                <button className="flex items-center space-x-2 bg-green-50 text-green-700 px-4 py-2 rounded-lg hover:bg-green-100 transition-colors duration-200">
-                  <ArrowRight className="w-4 h-4" />
-                  <span>Enroll Student</span>
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    type="button"
+                    className="flex items-center space-x-2 bg-red-50 text-red-700 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors duration-200"
+                    onClick={(e) => handleDeleteStudent(student, e)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseUp={(e) => e.stopPropagation()}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete</span>
+                  </button>
+                  <button 
+                    type="button"
+                    className="flex items-center space-x-2 bg-green-50 text-green-700 px-4 py-2 rounded-lg hover:bg-green-100 transition-colors duration-200"
+                    onClick={(e) => handleEnrollStudent(student, e)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseUp={(e) => e.stopPropagation()}
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    <span>Enroll Student</span>
+                  </button>
+                </div>
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
-
-      {isIntakeFormOpen && selectedStudent && (
-        <IntakeForm
-          student={selectedStudent}
-          isOpen={isIntakeFormOpen}
-          onClose={() => setIsIntakeFormOpen(false)}
-          isEditing={true}
-        />
-      )}
 
       {isAddFormOpen && (
         <AddToWaitingList
           isOpen={isAddFormOpen}
           onClose={() => setIsAddFormOpen(false)}
+          editingEntry={selectedStudent}
+          isEditing={!!selectedStudent}
+          onWaitingListAdded={() => {
+            // Refresh waiting list data after successful addition
+            setSelectedStudent(null); // Reset selected student after editing
+            // Force refresh of waiting list data
+            if (refreshWaitingList) {
+              refreshWaitingList();
+            }
+          }}
         />
+      )}
+
+      {isEnrollFormOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[95vh] overflow-hidden">
+            <AddStudent
+              onBack={() => {
+                setIsEnrollFormOpen(false);
+                setSelectedStudent(null);
+              }}
+              prefillData={selectedStudent}
+              onStudentAdded={() => {
+                // Refresh waiting list data after successful enrollment
+                setIsEnrollFormOpen(false);
+                setSelectedStudent(null);
+                // Force refresh of waiting list data
+                if (refreshWaitingList) {
+                  refreshWaitingList();
+                }
+              }}
+              onWaitingListEntryDeleted={() => {
+                // Refresh waiting list data after successful enrollment and deletion
+                setIsEnrollFormOpen(false);
+                setSelectedStudent(null);
+                // Force refresh of waiting list data
+                if (refreshWaitingList) {
+                  refreshWaitingList();
+                }
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

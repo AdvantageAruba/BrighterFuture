@@ -7,9 +7,10 @@ interface AttendanceDetailsProps {
   attendanceRecord: any;
   isOpen: boolean;
   onClose: () => void;
+  onAttendanceDeleted?: () => void;
 }
 
-const AttendanceDetails: React.FC<AttendanceDetailsProps> = ({ student, attendanceRecord, isOpen, onClose }) => {
+const AttendanceDetails: React.FC<AttendanceDetailsProps> = ({ student, attendanceRecord, isOpen, onClose, onAttendanceDeleted }) => {
   const { attendance, updateAttendance, deleteAttendance, refreshAttendance } = useAttendance();
   const [selectedStartDate, setSelectedStartDate] = useState<string>('');
   const [selectedEndDate, setSelectedEndDate] = useState<string>('');
@@ -104,6 +105,10 @@ const AttendanceDetails: React.FC<AttendanceDetailsProps> = ({ student, attendan
       const result = await deleteAttendance(currentAttendanceRecord.id);
       if (result.success) {
         alert('Attendance record deleted successfully!');
+        // Call the callback to notify parent component
+        if (onAttendanceDeleted) {
+          onAttendanceDeleted();
+        }
         onClose();
       } else {
         alert(`Failed to delete attendance record: ${result.error}`);

@@ -7,9 +7,12 @@ interface AddDailyNoteProps {
   isOpen: boolean;
   onClose: () => void;
   selectedStudentId?: number; // Add this prop for pre-selecting a student
+  onNoteAdded?: () => void; // Add callback for when note is successfully added
+  editNote?: any; // Add this prop for editing an existing note
+  isEditMode?: boolean; // Add this prop to indicate if we're in edit mode
 }
 
-const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedStudentId }) => {
+const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedStudentId, onNoteAdded, editNote, isEditMode = false }) => {
   const [formData, setFormData] = useState({
     program: '',
     studentId: '',
@@ -52,9 +55,48 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedSt
     }
   }, [selectedStudentId]);
 
+  // Pre-populate form when editing a note
+  useEffect(() => {
+    if (isEditMode && editNote) {
+      try {
+        // Parse the note data from the JSON string
+        const parsedNoteData = editNote.parsedData || JSON.parse(editNote.note);
+        
+        setFormData({
+          program: editNote.program || '',
+          studentId: editNote.id?.toString() || '',
+          category: parsedNoteData.category || 'behavior',
+          overallMood: parsedNoteData.overallMood || 'neutral',
+          generalNotes: parsedNoteData.generalNotes || '',
+          behaviorNotes: parsedNoteData.behaviorNotes || '',
+          academicProgress: parsedNoteData.academicProgress || '',
+          socialInteraction: parsedNoteData.socialInteraction || '',
+          activitiesParticipated: parsedNoteData.activitiesParticipated || '',
+          achievementsSuccesses: parsedNoteData.achievementsSuccesses || '',
+          concernsChallenges: parsedNoteData.concernsChallenges || '',
+          tags: parsedNoteData.tags?.join(', ') || '',
+          priority: parsedNoteData.priority || 'medium',
+          parentContacted: parsedNoteData.parentContacted || false,
+          parentContactNotes: parsedNoteData.parentContactNotes || '',
+          followUpNeeded: parsedNoteData.followUpNeeded || false,
+          followUpAssignee: parsedNoteData.followUpAssignee || ''
+        });
+      } catch (error) {
+        console.error('Error parsing note data for editing:', error);
+        // Fallback to basic data
+        setFormData(prev => ({
+          ...prev,
+          program: editNote.program || '',
+          studentId: editNote.id?.toString() || '',
+          generalNotes: editNote.note || ''
+        }));
+      }
+    }
+  }, [isEditMode, editNote]);
+
   // Use real data from Supabase
   const { programs: supabasePrograms, students: supabaseStudents } = useStudents();
-  const { addDailyNote } = useDailyNotes();
+  const { addDailyNote, updateDailyNote } = useDailyNotes();
 
   // Transform programs for UI
   const programs = supabasePrograms.map(p => ({ 
@@ -134,11 +176,38 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedSt
     }
 
     try {
-      // Prepare note data for Supabase
+      let selectedStudent, selectedProgram;
+      
+      if (isEditMode && editNote) {
+        // In edit mode, use the original note data
+        selectedStudent = {
+          id: parseInt(formData.studentId),
+          name: editNote.studentName
+        };
+        selectedProgram = {
+          id: parseInt(formData.program),
+          name: editNote.programName
+        };
+      } else {
+        // In add mode, find from the current data
+        selectedStudent = supabaseStudents.find(s => s.id === parseInt(formData.studentId));
+        selectedProgram = supabasePrograms.find(p => p.id === parseInt(formData.program));
+        
+        if (!selectedStudent || !selectedProgram) {
+          alert('Student or program not found');
+          return;
+        }
+      }
+
+      // Prepare note data for Supabase using the correct interface
       const noteData = {
         student_id: parseInt(formData.studentId),
+        student_name: selectedStudent.name,
         program_id: parseInt(formData.program),
-        date: new Date().toISOString().split('T')[0],
+        program_name: selectedProgram.name,
+        author_id: 'current-user', // Will be updated when user authentication is implemented
+        author_name: 'Current User', // Will be updated when user authentication is implemented
+        date: new Date().toISOString().split('T')[0],  // Changed from note_date to date
         notes: JSON.stringify({
           category: formData.category,
           overallMood: formData.overallMood,
@@ -149,35 +218,80 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedSt
           activitiesParticipated: formData.activitiesParticipated,
           achievementsSuccesses: formData.achievementsSuccesses,
           concernsChallenges: formData.concernsChallenges,
-          tags: formData.tags,
           priority: formData.priority,
           parentContacted: formData.parentContacted,
           parentContactNotes: formData.parentContactNotes,
           followUpNeeded: formData.followUpNeeded,
           followUpAssignee: formData.followUpAssignee
         }),
-        created_by: 'Current User' // Will be updated when user authentication is implemented
+        tags: formData.tags ? formData.tags.split(',').map(tag => tag.trim()) : []
       };
 
-      // Save to Supabase
-      const result = await addDailyNote(noteData);
+      let result;
       
-      if (result.success) {
-        console.log('Daily note added successfully');
-        alert('Daily note added successfully!');
-        onClose();
+      if (isEditMode && editNote) {
+        // Update existing note - only update the notes field and tags
+        const updateData = {
+          notes: JSON.stringify({
+            category: formData.category,
+            overallMood: formData.overallMood,
+            generalNotes: formData.generalNotes,
+            behaviorNotes: formData.behaviorNotes,
+            academicProgress: formData.academicProgress,
+            socialInteraction: formData.socialInteraction,
+            activitiesParticipated: formData.activitiesParticipated,
+            achievementsSuccesses: formData.achievementsSuccesses,
+            concernsChallenges: formData.concernsChallenges,
+            priority: formData.priority,
+            parentContacted: formData.parentContacted,
+            parentContactNotes: formData.parentContactNotes,
+            followUpNeeded: formData.followUpNeeded,
+            followUpAssignee: formData.followUpAssignee
+          }),
+          tags: formData.tags ? formData.tags.split(',').map(tag => tag.trim()) : []
+        };
+        
+        result = await updateDailyNote(editNote.id, updateData);
+        
+        if (result.success) {
+          console.log('Daily note updated successfully');
+          alert('Daily note updated successfully!');
+        } else {
+          alert('Failed to update daily note. Please try again.');
+          return;
+        }
       } else {
-        alert('Failed to add daily note. Please try again.');
+        // Add new note
+        result = await addDailyNote(noteData);
+        
+        if (result.success) {
+          console.log('Daily note added successfully');
+          alert('Daily note added successfully!');
+        } else {
+          alert('Failed to add daily note. Please try again.');
+          return;
+        }
       }
+      
+      // Call the callback to refresh the parent component
+      if (onNoteAdded) {
+        onNoteAdded();
+      }
+      
+      onClose();
     } catch (error) {
-      console.error('Error adding daily note:', error);
-      alert('Failed to add daily note. Please try again.');
+      console.error('Error saving daily note:', error);
+      alert('Failed to save daily note. Please try again.');
     }
   };
 
   const getAvailableStudents = () => {
     if (!formData.program) return [];
     return studentsByProgram[formData.program as keyof typeof studentsByProgram] || [];
+  };
+
+  const getAllStudents = () => {
+    return Object.values(studentsByProgram).flat();
   };
 
   const getSelectedStudentName = () => {
@@ -192,8 +306,8 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedSt
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-bold text-gray-900">
-          {selectedStudentId ? `Add Daily Note for ${studentsByProgram[formData.program as keyof typeof studentsByProgram]?.find((s: any) => s.id === selectedStudentId)?.name || 'Student'}` : 'Add Daily Note'}
-        </h2>
+              {isEditMode ? 'Edit Daily Note' : (selectedStudentId ? `Add Daily Note for ${studentsByProgram[formData.program as keyof typeof studentsByProgram]?.find((s: any) => s.id === selectedStudentId)?.name || 'Student'}` : 'Add Daily Note')}
+            </h2>
             <p className="text-gray-600">Record comprehensive observations and student progress</p>
           </div>
           <button
@@ -215,40 +329,53 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedSt
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Program *</label>
-                  <select
-                    name="program"
-                    value={formData.program}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select program first...</option>
-                    {programs.map((program) => (
-                      <option key={program.id} value={program.id}>
-                        {program.name}
-                      </option>
-                    ))}
-                  </select>
+                  {isEditMode && formData.program ? (
+                    <div className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700">
+                      {editNote?.programName || programs.find(p => p.id === formData.program)?.name || 'Unknown Program'}
+                    </div>
+                  ) : (
+                    <select
+                      name="program"
+                      value={formData.program}
+                      onChange={handleInputChange}
+                      required
+                      disabled={isEditMode}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isEditMode ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    >
+                      <option value="">Select program first...</option>
+                      {programs.map((program) => (
+                        <option key={program.id} value={program.id}>
+                          {program.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Student *</label>
-                  <select
-                    name="studentId"
-                    value={formData.studentId}
-                    onChange={handleInputChange}
-                    required
-                    disabled={!formData.program}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">
-                      {formData.program ? 'Select student...' : 'Select program first'}
-                    </option>
-                    {getAvailableStudents().map((student) => (
-                      <option key={student.id} value={student.id}>
-                        {student.name} (Age {student.age})
+                  {isEditMode && formData.studentId ? (
+                    <div className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700">
+                      {editNote?.studentName || getAllStudents().find(s => s.id.toString() === formData.studentId)?.name || 'Unknown Student'}
+                    </div>
+                  ) : (
+                    <select
+                      name="studentId"
+                      value={formData.studentId}
+                      onChange={handleInputChange}
+                      required
+                      disabled={isEditMode || !formData.program}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${(isEditMode || !formData.program) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    >
+                      <option value="">
+                        {formData.program ? 'Select student...' : 'Select program first'}
                       </option>
-                    ))}
-                  </select>
+                      {getAvailableStudents().map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {student.name} (Age {student.age})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
             </div>

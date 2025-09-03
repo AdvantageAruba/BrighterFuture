@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { X, Save, User, Phone, Mail, Calendar, MapPin, FileText } from 'lucide-react';
+import { useWaitingList } from '../hooks/useWaitingList';
 
 interface AddToWaitingListProps {
   isOpen: boolean;
   onClose: () => void;
+  onWaitingListAdded?: () => void;
+  editingEntry?: any; // Add support for editing existing entry
+  isEditing?: boolean; // Add flag to indicate editing mode
 }
 
-const AddToWaitingList: React.FC<AddToWaitingListProps> = ({ isOpen, onClose }) => {
+const AddToWaitingList: React.FC<AddToWaitingListProps> = ({ isOpen, onClose, onWaitingListAdded, editingEntry, isEditing = false }) => {
+  const { addWaitingListEntry, updateWaitingListEntry } = useWaitingList();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     // Student Information
     firstName: '',
@@ -34,6 +40,48 @@ const AddToWaitingList: React.FC<AddToWaitingListProps> = ({ isOpen, onClose }) 
     reasonForWaiting: ''
   });
 
+  // Pre-populate form when editing
+  React.useEffect(() => {
+    if (isEditing && editingEntry) {
+      setFormData({
+        firstName: editingEntry.first_name || '',
+        lastName: editingEntry.last_name || '',
+        dateOfBirth: editingEntry.date_of_birth || '',
+        age: editingEntry.age ? editingEntry.age.toString() : '',
+        parentName: editingEntry.parent_name || '',
+        parentPhone: editingEntry.parent_phone || '',
+        parentEmail: editingEntry.parent_email || '',
+        address: editingEntry.address || '',
+        emergencyContact: editingEntry.emergency_contact || '',
+        emergencyPhone: editingEntry.emergency_phone || '',
+        program: editingEntry.program || '',
+        priority: editingEntry.priority || 'medium',
+        preferredStartDate: editingEntry.preferred_start_date || '',
+        notes: editingEntry.notes || '',
+        reasonForWaiting: editingEntry.reason_for_waiting || ''
+      });
+    } else {
+      // Reset form when adding new entry
+      setFormData({
+        firstName: '',
+        lastName: '',
+        dateOfBirth: '',
+        age: '',
+        parentName: '',
+        parentPhone: '',
+        parentEmail: '',
+        address: '',
+        emergencyContact: '',
+        emergencyPhone: '',
+        program: '',
+        priority: 'medium',
+        preferredStartDate: '',
+        notes: '',
+        reasonForWaiting: ''
+      });
+    }
+  }, [isEditing, editingEntry, isOpen]);
+
   const programs = [
     { id: 'academy', name: 'Brighter Future Academy' },
     { id: 'first-steps', name: 'First Steps' },
@@ -47,21 +95,93 @@ const AddToWaitingList: React.FC<AddToWaitingListProps> = ({ isOpen, onClose }) 
     { id: 'low', name: 'Low Priority' }
   ];
 
+  // Function to calculate age from date of birth
+  const calculateAge = (dateOfBirth: string): number => {
+    if (!dateOfBirth) return 0;
+    
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    // Adjust age if birthday hasn't occurred yet this year
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  };
+
   if (!isOpen) return null;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // If date of birth is being changed, automatically calculate age
+    if (name === 'dateOfBirth') {
+      const calculatedAge = calculateAge(value);
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        age: calculatedAge > 0 ? calculatedAge.toString() : ''
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Waiting list data:', formData);
-    alert('Student added to waiting list successfully!');
-    onClose();
+    
+    setIsSubmitting(true);
+    try {
+      // Transform form data to match database schema
+      const waitingListData = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        date_of_birth: formData.dateOfBirth,
+        age: formData.age ? parseInt(formData.age) : undefined,
+        parent_name: formData.parentName,
+        parent_phone: formData.parentPhone,
+        parent_email: formData.parentEmail,
+        address: formData.address || undefined,
+        emergency_contact: formData.emergencyContact || undefined,
+        emergency_phone: formData.emergencyPhone || undefined,
+        program: formData.program,
+        priority: formData.priority as 'high' | 'medium' | 'low',
+        preferred_start_date: formData.preferredStartDate || undefined,
+        reason_for_waiting: formData.reasonForWaiting || undefined,
+        notes: formData.notes || undefined
+      };
+
+      let result;
+      if (isEditing && editingEntry) {
+        // Update existing entry
+        result = await updateWaitingListEntry(editingEntry.id, waitingListData);
+      } else {
+        // Add new entry
+        result = await addWaitingListEntry(waitingListData);
+      }
+      
+      if (result.success) {
+        alert(isEditing ? 'Waiting list entry updated successfully!' : 'Student added to waiting list successfully!');
+        // Call callback to notify parent component
+        if (onWaitingListAdded) {
+          onWaitingListAdded();
+        }
+        onClose();
+      } else {
+        alert(`Failed to ${isEditing ? 'update' : 'add'} waiting list entry: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`An error occurred while ${isEditing ? 'updating' : 'adding'} the waiting list entry.`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,8 +189,8 @@ const AddToWaitingList: React.FC<AddToWaitingListProps> = ({ isOpen, onClose }) 
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Add to Waiting List</h2>
-            <p className="text-gray-600">Add a new student to the program waiting list</p>
+            <h2 className="text-xl font-bold text-gray-900">{isEditing ? 'Edit Waiting List Entry' : 'Add to Waiting List'}</h2>
+            <p className="text-gray-600">{isEditing ? 'Update the waiting list entry details' : 'Add a new student to the program waiting list'}</p>
           </div>
           <button
             onClick={onClose}
@@ -123,16 +243,16 @@ const AddToWaitingList: React.FC<AddToWaitingListProps> = ({ isOpen, onClose }) 
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Age</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Age (Auto-calculated)</label>
                   <input
                     type="number"
                     name="age"
                     value={formData.age}
-                    onChange={handleInputChange}
-                    min="1"
-                    max="18"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                    placeholder="Enter date of birth to calculate age"
                   />
+                  <p className="text-xs text-gray-500 mt-1">Age is automatically calculated from the date of birth</p>
                 </div>
               </div>
             </div>
@@ -282,10 +402,11 @@ const AddToWaitingList: React.FC<AddToWaitingListProps> = ({ isOpen, onClose }) 
             </button>
             <button
               type="submit"
-              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              disabled={isSubmitting}
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:bg-blue-400 disabled:cursor-not-allowed"
             >
               <Save className="w-4 h-4" />
-              <span>Add to Waiting List</span>
+              <span>{isSubmitting ? (isEditing ? 'Updating...' : 'Adding...') : (isEditing ? 'Update Entry' : 'Add to Waiting List')}</span>
             </button>
           </div>
         </form>

@@ -1,36 +1,40 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Save, User, Phone, Mail, Calendar, MapPin, FileText } from 'lucide-react';
 import { useStudents } from '../hooks/useStudents';
+import { useWaitingList } from '../hooks/useWaitingList';
 import PictureUpload from './PictureUpload';
 
 interface AddStudentProps {
   onBack: () => void;
   onStudentAdded?: () => void; // Callback when student is successfully added
+  prefillData?: any; // Add support for pre-filling data from waiting list
+  onWaitingListEntryDeleted?: () => void; // Callback when waiting list entry is deleted
 }
 
-const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
+const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded, prefillData, onWaitingListEntryDeleted }) => {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    dateOfBirth: '',
-    age: '',
+    firstName: prefillData?.first_name || '',
+    lastName: prefillData?.last_name || '',
+    dateOfBirth: prefillData?.date_of_birth || '',
+    age: prefillData?.age ? prefillData.age.toString() : '',
     gender: '',
-    program: '',
+    program: prefillData?.program || '',
     classId: '', // Changed from className to classId
     teacher: '',
-    parentName: '',
-    parentPhone: '',
-    parentEmail: '',
-    address: '',
-    emergencyContact: '',
-    emergencyPhone: '',
+    parentName: prefillData?.parent_name || '',
+    parentPhone: prefillData?.parent_phone || '',
+    parentEmail: prefillData?.parent_email || '',
+    address: prefillData?.address || '',
+    emergencyContact: prefillData?.emergency_contact || '',
+    emergencyPhone: prefillData?.emergency_phone || '',
     medicalConditions: '',
     allergies: '',
-    notes: '',
+    notes: prefillData?.notes || prefillData?.reason_for_waiting || '',
     status: 'active'
   });
 
   const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Use real data from Supabase
   const { 
@@ -42,6 +46,9 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
     addStudent, 
     uploadStudentPicture 
   } = useStudents();
+
+  // Use waiting list hook for deleting entries
+  const { deleteWaitingListEntry } = useWaitingList();
 
   // Transform programs for UI
   const programs = supabasePrograms.map(p => ({ 
@@ -55,6 +62,7 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
   // Get teacher for the selected class
   const selectedClass = availableClasses.find(cls => cls.id.toString() === formData.classId);
   const assignedTeacher = selectedClass && selectedClass.teacher_id ? getTeacherName(selectedClass.teacher_id) : 'No teacher assigned';
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
@@ -64,33 +72,29 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
         [name]: value
       };
       
-             // Automatically calculate age when date of birth changes
-       if (name === 'dateOfBirth' && value) {
-         const birthDate = new Date(value);
-         const today = new Date();
-         let age = today.getFullYear() - birthDate.getFullYear();
-         const monthDiff = today.getMonth() - birthDate.getMonth();
-         
-         // Adjust age if birthday hasn't occurred yet this year
-         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-           age--;
-         }
-         
-         newData.age = age.toString();
-       }
-       
-       // Reset class selection when program changes
-       if (name === 'program') {
-         newData.classId = '';
-       }
+      // Automatically calculate age when date of birth changes
+      if (name === 'dateOfBirth' && value) {
+        const birthDate = new Date(value);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        
+        // Adjust age if birthday hasn't occurred yet this year
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        
+        newData.age = age.toString();
+      }
+      
+      // Reset class selection when program changes
+      if (name === 'program') {
+        newData.classId = '';
+      }
       
       return newData;
     });
   };
-
-
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,6 +150,22 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
         }
         
         alert('Student added successfully!');
+        
+        // If this was an enrollment from waiting list, delete the waiting list entry
+        if (prefillData && prefillData.id) {
+          const deleteResult = await deleteWaitingListEntry(prefillData.id);
+          if (deleteResult.success) {
+            console.log('Waiting list entry deleted successfully');
+            // Call the callback to notify parent component about waiting list deletion
+            if (onWaitingListEntryDeleted) {
+              onWaitingListEntryDeleted();
+            }
+          } else {
+            console.warn('Student enrolled but waiting list entry deletion failed:', deleteResult.error);
+            alert('Student enrolled successfully, but failed to remove from waiting list. You can manually remove them later.');
+          }
+        }
+        
         // Call the callback to notify parent component
         if (onStudentAdded) {
           onStudentAdded();
@@ -163,24 +183,24 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-4">
+    <div className="h-full flex flex-col max-h-[95vh]">
+      {/* Modal Header */}
+      <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">{prefillData ? 'Enroll Student from Waiting List' : 'Add New Student'}</h2>
+          <p className="text-gray-600">{prefillData ? 'Complete enrollment for student from waiting list' : 'Enter student information and enrollment details'}</p>
+        </div>
         <button
           onClick={onBack}
-          className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200"
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
         >
-          <ArrowLeft className="w-5 h-5" />
-          <span>Back to Students</span>
+          <ArrowLeft className="w-5 h-5 text-gray-400" />
         </button>
       </div>
 
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Add New Student</h1>
-        <p className="text-gray-600 mt-2">Enter student information and enrollment details</p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-        <div className="space-y-8">
+      {/* Modal Content */}
+      <div className="flex-1 overflow-y-auto p-6 min-h-0">
+        <form onSubmit={handleSubmit} className="space-y-8">
           {/* Student Information */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
@@ -221,58 +241,46 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-                             <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-2">Age (Calculated)</label>
-                 <input
-                   type="number"
-                   name="age"
-                   value={formData.age}
-                   readOnly
-                   min="1"
-                   max="18"
-                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
-                   placeholder="Enter date of birth to calculate age"
-                 />
-               </div>
-               <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
-                 <select
-                   name="gender"
-                   value={formData.gender}
-                   onChange={handleInputChange}
-                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                 >
-                   <option value="">Select gender...</option>
-                   <option value="male">Male</option>
-                   <option value="female">Female</option>
-                   <option value="other">Other</option>
-                   <option value="prefer-not-to-say">Prefer not to say</option>
-                 </select>
-               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Age (Calculated)</label>
+                <input
+                  type="number"
+                  name="age"
+                  value={formData.age}
+                  readOnly
+                  min="1"
+                  max="18"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                  placeholder="Enter date of birth to calculate age"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Gender *</label>
+                <select
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select gender...</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Student Picture */}
+          {/* Program Information */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
               <User className="w-5 h-5" />
-              <span>Profile Picture</span>
+              <span>Program Information</span>
             </h3>
-            <PictureUpload
-              onPictureChange={setSelectedPicture}
-              size="md"
-            />
-          </div>
-
-          {/* Program Selection */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-              <FileText className="w-5 h-5" />
-              <span>Program Enrollment</span>
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Program *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Program *</label>
                 <select
                   name="program"
                   value={formData.program}
@@ -280,7 +288,7 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="">Choose a program...</option>
+                  <option value="">Select a program...</option>
                   {programs.map((program) => (
                     <option key={program.id} value={program.id}>
                       {program.name}
@@ -288,39 +296,31 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
                   ))}
                 </select>
               </div>
-                             <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
-                 <select
-                   name="classId"
-                   value={formData.classId}
-                   onChange={handleInputChange}
-                   disabled={!formData.program}
-                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                 >
-                   <option value="">
-                     {formData.program ? 'Select class...' : 'Select program first'}
-                   </option>
-                   {availableClasses.map((cls) => (
-                     <option key={cls.id} value={cls.id}>
-                       {cls.name}
-                     </option>
-                   ))}
-                 </select>
-               </div>
-                             <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-2">Assigned Teacher</label>
-                 <input
-                   type="text"
-                   value={assignedTeacher || 'No teacher assigned'}
-                   readOnly
-                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
-                   placeholder="Teacher will be assigned based on class selection"
-                 />
-                 <p className="text-xs text-gray-500 mt-1">
-                   Teacher is automatically assigned based on the selected class
-                 </p>
-               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
+                <select
+                  name="classId"
+                  value={formData.classId}
+                  onChange={handleInputChange}
+                  disabled={!formData.program}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="">Select a class...</option>
+                  {availableClasses.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+            {assignedTeacher && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Assigned Teacher:</strong> {assignedTeacher}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Parent/Guardian Information */}
@@ -353,13 +353,12 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
                 <input
                   type="email"
                   name="parentEmail"
                   value={formData.parentEmail}
                   onChange={handleInputChange}
-                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -395,7 +394,7 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Phone Number *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Contact Phone *</label>
                 <input
                   type="tel"
                   name="emergencyPhone"
@@ -406,6 +405,15 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Student Picture */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Student Picture</h3>
+            <PictureUpload
+              selectedPicture={selectedPicture}
+              onPictureSelected={setSelectedPicture}
+            />
           </div>
 
           {/* Medical Information */}
@@ -481,30 +489,31 @@ const AddStudent: React.FC<AddStudentProps> = ({ onBack, onStudentAdded }) => {
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={onBack}
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`flex items-center space-x-2 px-6 py-2 rounded-lg transition-colors duration-200 ${
-              isSubmitting 
-                ? 'bg-gray-400 text-white cursor-not-allowed' 
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            <Save className="w-4 h-4" />
-            <span>{isSubmitting ? 'Adding Student...' : 'Add Student'}</span>
-          </button>
-        </div>
-      </form>
+          {/* Submit Buttons */}
+          <div className="flex items-center justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={`flex items-center space-x-2 px-6 py-2 rounded-lg transition-colors duration-200 ${
+                isSubmitting 
+                  ? 'bg-gray-400 text-white cursor-not-allowed' 
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSubmitting ? (prefillData ? 'Enrolling Student...' : 'Adding Student...') : (prefillData ? 'Enroll Student' : 'Add Student')}</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
