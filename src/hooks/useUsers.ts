@@ -51,9 +51,20 @@ export const useUsers = () => {
         .select('*')
         .order('first_name')
 
-      if (error) throw error
-      setUsers(data || [])
+      if (error) {
+        console.error('Users table error:', error)
+        // If table doesn't exist, set empty array and continue
+        if (error.code === 'PGRST116' || error.message?.includes('relation "users" does not exist')) {
+          setUsers([])
+          setError(null) // Clear error for missing table
+        } else {
+          throw error
+        }
+      } else {
+        setUsers(data || [])
+      }
     } catch (err) {
+      console.error('Error fetching users:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch users')
     } finally {
       setLoading(false)
@@ -68,10 +79,19 @@ export const useUsers = () => {
         .select('*')
         .order('name')
 
-      if (error) throw error
-      setPrograms(data || [])
+      if (error) {
+        console.error('Programs table error:', error)
+        if (error.code === 'PGRST116' || error.message?.includes('relation "programs" does not exist')) {
+          setPrograms([])
+        } else {
+          throw error
+        }
+      } else {
+        setPrograms(data || [])
+      }
     } catch (err) {
       console.error('Failed to fetch programs:', err)
+      setPrograms([]) // Set empty array on error
     }
   }
 
@@ -89,10 +109,19 @@ export const useUsers = () => {
 
       const { data, error } = await query
 
-      if (error) throw error
-      setClasses(data || [])
+      if (error) {
+        console.error('Classes table error:', error)
+        if (error.code === 'PGRST116' || error.message?.includes('relation "classes" does not exist')) {
+          setClasses([])
+        } else {
+          throw error
+        }
+      } else {
+        setClasses(data || [])
+      }
     } catch (err) {
       console.error('Failed to fetch classes:', err)
+      setClasses([]) // Set empty array on error
     }
   }
 
@@ -101,13 +130,39 @@ export const useUsers = () => {
     try {
       const { data, error } = await supabase
         .from('users')
-        .insert([userData])
+        .upsert([userData], { 
+          onConflict: 'email',
+          ignoreDuplicates: false 
+        })
         .select()
 
       if (error) throw error
       
       if (data) {
-        setUsers(prev => [...prev, data[0]])
+        const newUser = data[0]
+        setUsers(prev => [...prev, newUser])
+        
+        // If this is a teacher with program_id and class_id, automatically assign them to the class
+        if (newUser.role === 'teacher' && newUser.program_id && newUser.class_id) {
+          try {
+            const { error: classError } = await supabase
+              .from('classes')
+              .update({ teacher_id: newUser.id })
+              .eq('id', newUser.class_id)
+              .eq('program_id', newUser.program_id)
+            
+            if (classError) {
+              console.error('Failed to auto-assign teacher to class:', classError)
+              // Don't throw error here - user was created successfully, just assignment failed
+            } else {
+              // Refresh classes to update UI immediately
+              fetchClasses()
+            }
+          } catch (assignError) {
+            console.error('Error during auto-assignment:', assignError)
+            // Don't throw error here - user was created successfully
+          }
+        }
       }
       
       return { success: true, data: data?.[0] }
@@ -250,7 +305,19 @@ export const useUsers = () => {
 
   // Get class name by ID
   const getClassName = (classId: string) => {
-    const classGroup = classes.find(c => c.id === classId)
+    // Try different ID formats to handle type mismatches
+    let classGroup = classes.find(c => c.id === classId);
+    
+    if (!classGroup) {
+      // Try string comparison
+      classGroup = classes.find(c => String(c.id) === String(classId));
+      
+      if (!classGroup) {
+        // Try number comparison
+        classGroup = classes.find(c => c.id === Number(classId));
+      }
+    }
+    
     return classGroup?.name || 'Unknown Class'
   }
 

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Plus, Filter } from 'lucide-react';
+import { Plus, Filter, Calendar as CalendarIcon, X } from 'lucide-react';
 import AddEvent from './AddEvent';
 import EventDetails from './EventDetails';
 import CalendarGrid from './CalendarGrid';
+import { useEvents } from '../hooks/useEvents';
 
 const Calendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -11,67 +12,31 @@ const Calendar: React.FC = () => {
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isEditEventOpen, setIsEditEventOpen] = useState(false);
+  const [eventToEdit, setEventToEdit] = useState(null);
 
-  const events = [
-    {
-      id: 1,
-      title: 'IEP Meeting - Emma Rodriguez',
-      start: '09:00',
-      end: '10:00',
-      date: '2024-01-15',
-      type: 'meeting',
-      location: 'Conference Room A',
-      attendees: ['Dr. Johnson', 'Ms. Smith', 'Parent'],
-      description: 'Individual Education Program meeting to discuss Emma\'s progress and update her learning goals.',
-      priority: 'high',
-      program: 'Brighter Future Academy',
-      student: 'Emma Rodriguez',
-      notes: 'Please bring previous assessment results and current IEP documentation.'
-    },
-    {
-      id: 2,
-      title: 'Group Therapy Session',
-      start: '11:30',
-      end: '12:30',
-      date: '2024-01-15',
-      type: 'therapy',
-      location: 'Therapy Room 2',
-      attendees: ['Dr. Wilson', '6 students'],
-      description: 'Weekly group therapy session focusing on social skills development and peer interaction.',
-      priority: 'medium',
-      program: 'First Steps',
-      notes: 'Focus on turn-taking and communication skills this week.'
-    },
-    {
-      id: 3,
-      title: 'Assessment - Michael Chen',
-      start: '14:00',
-      end: '15:00',
-      date: '2024-01-15',
-      type: 'assessment',
-      location: 'Assessment Room',
-      attendees: ['Dr. Brown', 'Parent'],
-      description: 'Comprehensive developmental assessment to evaluate progress and adjust intervention strategies.',
-      priority: 'high',
-      program: 'First Steps',
-      student: 'Michael Chen',
-      notes: 'This is a follow-up assessment after 3 months of intervention.'
-    },
-    {
-      id: 4,
-      title: 'Parent Consultation',
-      start: '16:00',
-      end: '17:00',
-      date: '2024-01-16',
-      type: 'consultation',
-      location: 'Office 3',
-      attendees: ['Dr. Johnson', 'Parent'],
-      description: 'Consultation meeting to discuss home strategies and coordinate care between school and home.',
-      priority: 'medium',
-      program: 'Individual Therapy',
-      student: 'Isabella Garcia'
-    }
-  ];
+  // Use the events hook to get real data
+  const { events, loading, error, refreshEvents, addEvent, deleteEvent } = useEvents();
+
+  // Transform events to match the expected format for CalendarGrid
+  const transformedEvents = events.map(event => ({
+    id: event.id,
+    title: event.title,
+    start: event.start_time,
+    end: event.end_time,
+    date: event.date,
+    type: event.type,
+    location: event.location,
+    attendees: event.attendees ? event.attendees.split(', ') : [],
+    description: event.description,
+    priority: event.priority,
+    program: event.program_name,
+    student: event.student_name,
+    notes: event.notes,
+    author: event.author_name,
+    created_at: event.created_at
+  }));
 
   const handleDateSelect = (date: string) => {
     setSelectedDate(date);
@@ -86,6 +51,41 @@ const Calendar: React.FC = () => {
   const handleAddEvent = () => {
     setSelectedDate(null);
     setIsAddEventOpen(true);
+  };
+
+  const handleDateNavigation = (selectedDate: string) => {
+    setCurrentDate(new Date(selectedDate));
+    setIsDatePickerOpen(false);
+  };
+
+  const handleEditEvent = (event: any) => {
+    // Find the original event data from the events array
+    const originalEvent = events.find(e => e.id === event.id);
+    
+    if (originalEvent) {
+      setEventToEdit(originalEvent);
+      setIsEditEventOpen(true);
+      setIsEventDetailsOpen(false);
+    } else {
+      console.error('Original event not found for editing:', event);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: number) => {
+    if (window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+      try {
+        const result = await deleteEvent(eventId);
+        if (result.success) {
+          alert('Event deleted successfully!');
+          setIsEventDetailsOpen(false);
+        } else {
+          alert(`Failed to delete event: ${result.error}`);
+        }
+      } catch (error) {
+        console.error('Error deleting event:', error);
+        alert('Failed to delete event. Please try again.');
+      }
+    }
   };
 
   const handleNavigate = (direction: 'prev' | 'next') => {
@@ -144,6 +144,13 @@ const Calendar: React.FC = () => {
                   <option>Consultations</option>
                 </select>
               </div>
+              <button
+                onClick={() => setIsDatePickerOpen(true)}
+                className="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+              >
+                <CalendarIcon className="w-4 h-4 text-gray-600" />
+                <span className="text-sm text-gray-700">Go to Date</span>
+              </button>
             </div>
             <div className="flex rounded-lg border border-gray-300 overflow-hidden">
               <button
@@ -175,14 +182,25 @@ const Calendar: React.FC = () => {
         </div>
 
         <div className="p-6">
-          <CalendarGrid
-            currentDate={currentDate}
-            view={view}
-            events={events}
-            onDateSelect={handleDateSelect}
-            onEventClick={handleEventClick}
-            onNavigate={handleNavigate}
-          />
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-gray-600">Loading events...</span>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-red-600">Error loading events: {error}</p>
+            </div>
+          ) : (
+            <CalendarGrid
+              currentDate={currentDate}
+              view={view}
+              events={transformedEvents}
+              onDateSelect={handleDateSelect}
+              onEventClick={handleEventClick}
+              onNavigate={handleNavigate}
+            />
+          )}
         </div>
       </div>
 
@@ -191,6 +209,7 @@ const Calendar: React.FC = () => {
           isOpen={isAddEventOpen}
           onClose={() => setIsAddEventOpen(false)}
           selectedDate={selectedDate || undefined}
+          onEventAdded={refreshEvents}
         />
       )}
 
@@ -199,7 +218,118 @@ const Calendar: React.FC = () => {
           event={selectedEvent}
           isOpen={isEventDetailsOpen}
           onClose={() => setIsEventDetailsOpen(false)}
+          onEdit={handleEditEvent}
+          onDelete={handleDeleteEvent}
         />
+      )}
+
+      {isEditEventOpen && eventToEdit && (
+        <AddEvent
+          isOpen={isEditEventOpen}
+          onClose={() => {
+            setIsEditEventOpen(false);
+            setEventToEdit(null);
+          }}
+          isEditMode={true}
+          existingEvent={eventToEdit}
+          onEventAdded={(updatedEvent) => {
+            setIsEditEventOpen(false);
+            setEventToEdit(null);
+            refreshEvents();
+          }}
+        />
+      )}
+
+      {/* Date Picker Modal */}
+      {isDatePickerOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Go to Date</h2>
+                <p className="text-gray-600">Select a specific date to navigate to</p>
+              </div>
+              <button
+                onClick={() => setIsDatePickerOpen(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Date</label>
+                  <input
+                    type="date"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleDateNavigation(e.target.value);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                {/* Quick Navigation */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Quick Navigation</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        const today = new Date();
+                        handleDateNavigation(today.toISOString().split('T')[0]);
+                      }}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      Today
+                    </button>
+                    <button
+                      onClick={() => {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        handleDateNavigation(tomorrow.toISOString().split('T')[0]);
+                      }}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      onClick={() => {
+                        const nextWeek = new Date();
+                        nextWeek.setDate(nextWeek.getDate() + 7);
+                        handleDateNavigation(nextWeek.toISOString().split('T')[0]);
+                      }}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      Next Week
+                    </button>
+                    <button
+                      onClick={() => {
+                        const nextMonth = new Date();
+                        nextMonth.setMonth(nextMonth.getMonth() + 1);
+                        handleDateNavigation(nextMonth.toISOString().split('T')[0]);
+                      }}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      Next Month
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-end space-x-3 pt-4">
+                  <button
+                    onClick={() => setIsDatePickerOpen(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

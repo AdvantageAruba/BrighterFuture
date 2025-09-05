@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, User, Mail, Phone, Shield, Users } from 'lucide-react';
 import PictureUpload from './PictureUpload';
 import { useUsers } from '../hooks/useUsers';
+import { supabase } from '../lib/supabase';
 
 interface EditUserProps {
   user: any;
@@ -25,9 +26,43 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
   const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
   const [selectedProgram, setSelectedProgram] = useState<number | ''>(user.program_id || '');
   const [selectedClass, setSelectedClass] = useState<string | ''>(user.class_id || '');
+  const [availableClasses, setAvailableClasses] = useState<any[]>([]);
 
   // Use the users hook
   const { updateUser, uploadUserPicture, programs, classes, fetchClasses } = useUsers();
+
+  // Local function to fetch classes for a specific program
+  const fetchClassesForProgram = async (programId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('classes')
+        .select('*')
+        .eq('program_id', programId)
+        .order('name');
+
+      if (error) throw error;
+      setAvailableClasses(data || []);
+    } catch (err) {
+      console.error('Failed to fetch classes for program:', err);
+      setAvailableClasses([]);
+    }
+  };
+
+  // Initialize classes when component mounts or when user has a program_id
+  useEffect(() => {
+    console.log('EditUser - Initial user data:', user);
+    console.log('EditUser - Initial program_id:', user.program_id, 'Initial class_id:', user.class_id);
+    
+    // Update selected program and class when user data changes
+    setSelectedProgram(user.program_id || '');
+    setSelectedClass(user.class_id || '');
+    
+    if (user.program_id) {
+      fetchClassesForProgram(user.program_id);
+    } else {
+      setAvailableClasses([]);
+    }
+  }, [user.program_id, user.class_id]);
 
   // Get the current picture URL from the user data
   const currentPictureUrl = user.picture_url || user.avatar;
@@ -102,6 +137,10 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
         program_id: selectedProgram || undefined,
         class_id: selectedClass || undefined
       };
+
+      console.log('EditUser - Updating user with data:', updateData);
+      console.log('EditUser - Selected program:', selectedProgram, 'Selected class:', selectedClass);
+      console.log('EditUser - Original user program_id:', user.program_id, 'class_id:', user.class_id);
 
       // Update user in Supabase
       const result = await updateUser(user.id, updateData);
@@ -280,58 +319,59 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
               </div>
             </div>
 
-            {/* Program and Class Assignment */}
-            {(formData.role === 'teacher' || formData.role === 'therapist' || formData.role === 'coordinator') && (
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-                  <Users className="w-5 h-5" />
-                  <span>Program & Class Assignment</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Primary Program</label>
-                    <select
-                      value={selectedProgram}
-                      onChange={(e) => {
-                        const programId = e.target.value ? parseInt(e.target.value) : '';
-                        setSelectedProgram(programId);
-                        setSelectedClass(''); // Reset class when program changes
-                        if (programId) {
-                          fetchClasses(programId);
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Select program...</option>
-                      {programs.map((program) => (
-                        <option key={program.id} value={program.id}>
-                          {program.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Primary Class</label>
-                    <select
-                      value={selectedClass}
-                      onChange={(e) => setSelectedClass(e.target.value)}
-                      disabled={!selectedProgram}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <option value="">Select class...</option>
-                      {classes.map((classGroup) => (
-                        <option key={classGroup.id} value={classGroup.id}>
-                          {classGroup.name}
-                        </option>
-                      ))}
-                    </select>
-                    {!selectedProgram && (
-                      <p className="text-xs text-gray-500 mt-1">Select a program first to choose a class</p>
-                    )}
-                  </div>
+            {/* Program and Class Assignment - Available for all roles */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                <Users className="w-5 h-5" />
+                <span>Program & Class Assignment</span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Primary Program</label>
+                  <select
+                    value={selectedProgram}
+                    onChange={(e) => {
+                      const programId = e.target.value ? parseInt(e.target.value) : '';
+                      setSelectedProgram(programId);
+                      setSelectedClass(''); // Reset class when program changes
+                      if (programId) {
+                        fetchClassesForProgram(programId);
+                      } else {
+                        setAvailableClasses([]);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select program...</option>
+                    {programs.map((program) => (
+                      <option key={program.id} value={program.id}>
+                        {program.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Primary Class</label>
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                    disabled={!selectedProgram}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Select class...</option>
+                    {availableClasses.map((classGroup) => (
+                      <option key={classGroup.id} value={classGroup.id}>
+                        {classGroup.name}
+                      </option>
+                    ))}
+                  </select>
+                  {!selectedProgram && (
+                    <p className="text-xs text-gray-500 mt-1">Select a program first to choose a class</p>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
+
 
             {/* Permissions */}
             <div>

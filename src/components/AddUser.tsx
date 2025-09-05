@@ -127,7 +127,14 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
         }
         
         const newInviteLink = generateInviteLink();
-        alert(`User created successfully! ${formData.sendInvite ? 'Invite link generated.' : ''} ${selectedPicture ? 'Profile picture uploaded.' : ''}`);
+        let successMessage = `User created successfully! ${formData.sendInvite ? 'Invite link generated.' : ''} ${selectedPicture ? 'Profile picture uploaded.' : ''}`;
+        
+        // Add message about automatic teacher assignment if applicable
+        if (formData.role === 'teacher' && selectedProgram && selectedClass) {
+          successMessage += ' Teacher has been automatically assigned to the selected class.';
+        }
+        
+        alert(successMessage);
         
         // Close the modal after successful creation
         onClose();

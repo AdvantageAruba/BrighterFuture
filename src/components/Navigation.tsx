@@ -1,5 +1,6 @@
 import React from 'react';
-import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User, Database } from 'lucide-react';
+import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User, Database, MessageSquare } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface NavigationProps {
   activeTab: string;
@@ -12,6 +13,16 @@ interface NavigationProps {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }) => {
+  const { signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'students', label: 'Students', icon: Users },
@@ -20,6 +31,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
     { id: 'forms', label: 'Forms', icon: FileText },
     { id: 'dailynotes', label: 'Daily Notes', icon: BookOpen },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
+    { id: 'announcements', label: 'Announcements', icon: MessageSquare },
     { id: 'programs', label: 'Programs', icon: BookOpen },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'test', label: 'Database Test', icon: Database },
@@ -84,7 +96,10 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
           </div>
           <User className="w-4 h-4 text-gray-400" />
         </div>
-        <button className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors duration-200">
+        <button 
+          onClick={handleSignOut}
+          className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+        >
           <LogOut className="w-4 h-4" />
           <span>Sign Out</span>
         </button>

@@ -19,9 +19,11 @@ interface EventDetailsProps {
   };
   isOpen: boolean;
   onClose: () => void;
+  onEdit?: (event: any) => void;
+  onDelete?: (eventId: number) => void;
 }
 
-const EventDetails: React.FC<EventDetailsProps> = ({ event, isOpen, onClose }) => {
+const EventDetails: React.FC<EventDetailsProps> = ({ event, isOpen, onClose, onEdit, onDelete }) => {
   if (!isOpen) return null;
 
   const getEventColor = (type: string) => {
@@ -176,15 +178,17 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event, isOpen, onClose }) =
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
               <div className="flex flex-wrap gap-3">
-                <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                <button 
+                  onClick={() => onEdit?.(event)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                >
                   <Edit className="w-4 h-4" />
                   <span>Edit Event</span>
                 </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200">
-                  <Copy className="w-4 h-4" />
-                  <span>Duplicate Event</span>
-                </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200">
+                <button 
+                  onClick={() => onDelete?.(event.id)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+                >
                   <Trash2 className="w-4 h-4" />
                   <span>Delete Event</span>
                 </button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Eye, GraduationCap, Trash2 } from 'lucide-react';
+import { Plus, Edit, Eye, GraduationCap, Trash2, RefreshCw } from 'lucide-react';
 import AddProgram from './AddProgram';
 import EditProgram from './EditProgram';
 import ProgramDetails from './ProgramDetails';
@@ -58,7 +58,9 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
     getTotalStudentCount,
     addClass, 
     updateClass, 
-    deleteClass 
+    deleteClass,
+    refreshClasses,
+    refreshTeachers
   } = classesData;
 
     // Use programs from database instead of static data
@@ -70,6 +72,18 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
       setProgramsToDisplay(programs);
     }
   }, [programs]);
+
+  // Refresh classes data when component mounts to ensure latest assignments are shown
+  useEffect(() => {
+    refreshClasses();
+    refreshTeachers();
+  }, []);
+
+  // Also refresh data whenever the component is rendered (becomes visible)
+  useEffect(() => {
+    refreshClasses();
+    refreshTeachers();
+  });
 
   // Local helper functions
   const getClassesByProgramLocal = (programId: number) => {
@@ -88,11 +102,15 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
   const handleAddClassClick = (programId: number) => {
     setSelectedProgramForClass(programId);
     setIsAddClassOpen(true);
+    // Refresh teachers to ensure newly added teachers appear in dropdown
+    classesData.refreshTeachers();
   };
 
   const handleEditClass = (classData: Class) => {
     setEditingClass(classData);
     setIsEditClassOpen(true);
+    // Refresh teachers to ensure newly added teachers appear in dropdown
+    classesData.refreshTeachers();
   };
 
   const handleCloseClassModal = () => {
@@ -165,6 +183,16 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
           <p className="text-gray-600 mt-2">Manage educational programs and their classes</p>
         </div>
                                    <div className="flex items-center space-x-4">
+        <button 
+              onClick={() => {
+                refreshClasses();
+                refreshTeachers();
+              }}
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200 flex items-center space-x-2"
+        >
+              <RefreshCw className="w-5 h-5" />
+          <span>Refresh</span>
+        </button>
         <button 
               onClick={() => setIsAddProgramOpen(true)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"

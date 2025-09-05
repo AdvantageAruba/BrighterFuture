@@ -1,5 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Users, Calendar as CalendarIcon, Settings as SettingsIcon, BookOpen, FileText, Activity, Home, Plus, Clock, MessageSquare, Database } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Navigation from './components/Navigation';
+import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Students from './components/Students';
 import Attendance from './components/Attendance';
@@ -7,27 +9,37 @@ import WaitingList from './components/WaitingList';
 import Forms from './components/Forms';
 import DailyNotes from './components/DailyNotes';
 import Calendar from './components/Calendar';
+import Announcements from './components/Announcements';
 import ProgramManagement from './components/ProgramManagement';
 import Settings from './components/Settings';
 import UserProfile from './components/UserProfile';
-import Navigation from './components/Navigation';
-import SupabaseTest from './components/SupabaseTest';
+import TestComponent from './components/TestComponent';
 import { useClasses } from './hooks/useClasses';
 
-function App() {
+const AppContent: React.FC = () => {
+  const { user, userProfile, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [user] = useState({
-    name: 'Dr. Sarah Johnson',
-    role: 'Administrator',
-    avatar: 'https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop'
-  });
+  const [showUserProfile, setShowUserProfile] = useState(false);
 
-  // Move useClasses to App level so it persists across tab switches
+  // Get classes data for ProgramManagement
   const classesData = useClasses();
+
+  // Refresh classes data when navigating to programs page to ensure latest assignments are shown
+  useEffect(() => {
+    if (activeTab === 'programs') {
+      classesData.refreshClasses();
+      classesData.refreshTeachers();
+    }
+  }, [activeTab, classesData]);
 
   // Memoize the setActiveTab function to prevent unnecessary re-renders
   const handleTabChange = useCallback((tab: string) => {
-    setActiveTab(tab);
+    if (tab === 'profile') {
+      setShowUserProfile(true);
+    } else {
+      setActiveTab(tab);
+      setShowUserProfile(false);
+    }
   }, []);
 
   const renderContent = useMemo(() => {
@@ -46,33 +58,70 @@ function App() {
         return <DailyNotes />;
       case 'calendar':
         return <Calendar />;
+      case 'announcements':
+        return <Announcements />;
       case 'programs':
         return <ProgramManagement classesData={classesData} />;
       case 'settings':
         return <Settings />;
-      case 'profile':
-        return <UserProfile user={user} onBack={() => handleTabChange('dashboard')} />;
       case 'test':
-        return <SupabaseTest />;
+        return <TestComponent />;
       default:
         return <Dashboard setActiveTab={handleTabChange} />;
     }
-  }, [activeTab, user, classesData, handleTabChange]);
+  }, [activeTab, handleTabChange, classesData]);
+
+  // Show loading spinner while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-2 text-sm text-gray-500">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!user || !userProfile) {
+    console.log('No user or profile, showing login page');
+    return <Login />;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex">
       <Navigation 
         activeTab={activeTab} 
         setActiveTab={handleTabChange} 
-        user={user} 
+        user={{
+          name: `${userProfile.first_name} ${userProfile.last_name}`,
+          role: userProfile.role,
+          avatar: userProfile.picture_url || 'https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop'
+        }}
       />
-      
-      <main className="ml-64 transition-all duration-300">
+      <main className="flex-1 ml-64">
         <div className="p-8">
           {renderContent}
         </div>
       </main>
+      {showUserProfile && (
+        <UserProfile 
+          user={userProfile} 
+          isOpen={showUserProfile} 
+          onClose={() => setShowUserProfile(false)} 
+        />
+      )}
     </div>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

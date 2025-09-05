@@ -4,8 +4,31 @@ import AddDailyNote from './AddDailyNote';
 import ViewDailyNote from './ViewDailyNote';
 import { useDailyNotes } from '../hooks/useDailyNotes';
 
+// Utility function to map program names to IDs
+const getProgramId = (programName: string): string => {
+  if (!programName) return 'other';
+  
+  const normalized = programName.toLowerCase().trim();
+  
+  // Map common program name patterns to IDs
+  if (normalized.includes('academy') || normalized.includes('brighter future')) {
+    return 'academy';
+  }
+  if (normalized.includes('first steps') || normalized.includes('first-steps')) {
+    return 'first-steps';
+  }
+  if (normalized.includes('consultancy')) {
+    return 'consultancy';
+  }
+  if (normalized.includes('individual therapy') || normalized.includes('individual-therapy')) {
+    return 'individual-therapy';
+  }
+  
+  return 'other';
+};
+
 const DailyNotes: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState('');
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
@@ -23,12 +46,23 @@ const DailyNotes: React.FC = () => {
     refreshDailyNotes 
   } = useDailyNotes();
 
+  // Debug: Show available programs in the data
+  React.useEffect(() => {
+    if (dailyNotes && dailyNotes.length > 0) {
+      const uniquePrograms = [...new Set(dailyNotes.map(note => note.program_name))];
+      const uniqueDates = [...new Set(dailyNotes.map(note => note.date))];
+      console.log('Available programs in data:', uniquePrograms);
+      console.log('Available dates in data:', uniqueDates);
+    }
+  }, [dailyNotes]);
+
   const programs = [
     { id: 'all', name: 'All Programs' },
     { id: 'academy', name: 'Brighter Future Academy' },
     { id: 'first-steps', name: 'First Steps' },
     { id: 'consultancy', name: 'Consultancy' },
-    { id: 'individual-therapy', name: 'Individual Therapy' }
+    { id: 'individual-therapy', name: 'Individual Therapy' },
+    { id: 'other', name: 'Other Programs' }
   ];
 
   // Transform database data for display
@@ -56,12 +90,16 @@ const DailyNotes: React.FC = () => {
       noteSummary = note.notes || 'No notes available';
     }
     
+    // Use utility function to get program ID
+    const programId = getProgramId(note.program_name);
+    
     return {
       id: note.id,
       studentName: note.student_name || 'Unknown Student',
-      program: (note.program_name || '').toLowerCase().replace(/\s+/g, '-'),
+      program: programId,
       programName: note.program_name || 'Unknown Program',
       author: note.author_name || 'Unknown Author',
+      date: note.date || new Date().toISOString().split('T')[0], // Add date field for filtering
       timestamp: note.created_at || new Date().toISOString(),
       category: category,
       note: noteSummary, // Show readable summary in cards
@@ -85,7 +123,14 @@ const DailyNotes: React.FC = () => {
                          (note.note || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (note.author || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesProgram = selectedProgram === 'all' || note.program === selectedProgram;
-    return matchesSearch && matchesProgram;
+    const matchesDate = !selectedDate || note.date === selectedDate;
+    
+    // Debug: Log date filtering when a date is selected
+    if (selectedDate) {
+      console.log('Date filtering:', note.studentName, 'Note date:', note.date, 'Selected date:', selectedDate, 'Matches:', matchesDate);
+    }
+    
+    return matchesSearch && matchesProgram && matchesDate;
   });
 
   const handleAddNote = () => {
@@ -166,6 +211,14 @@ const DailyNotes: React.FC = () => {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
+            {selectedDate && (
+              <button
+                onClick={() => setSelectedDate('')}
+                className="text-xs text-gray-500 hover:text-gray-700 underline"
+              >
+                Clear
+              </button>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             <Filter className="w-5 h-5 text-gray-400" />
@@ -182,6 +235,40 @@ const DailyNotes: React.FC = () => {
             </select>
           </div>
         </div>
+
+        {/* Filter Summary */}
+        {(searchTerm || selectedDate || selectedProgram !== 'all') && (
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <span>Active filters:</span>
+              {searchTerm && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                  Search: "{searchTerm}"
+                </span>
+              )}
+              {selectedDate && (
+                <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                  Date: {new Date(selectedDate).toLocaleDateString()}
+                </span>
+              )}
+              {selectedProgram !== 'all' && (
+                <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full">
+                  Program: {programs.find(p => p.id === selectedProgram)?.name}
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedDate('');
+                  setSelectedProgram('all');
+                }}
+                className="text-xs text-gray-500 hover:text-gray-700 underline"
+              >
+                Clear all
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-6">
           {loading ? (

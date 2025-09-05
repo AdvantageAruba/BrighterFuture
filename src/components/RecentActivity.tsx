@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, Users, Calendar, MessageSquare, Plus } from 'lucide-react';
+import { FileText, Users, Calendar, MessageSquare, Plus, Clock, Bell } from 'lucide-react';
 import { useStudents } from '../hooks/useStudents';
 import { useAttendance } from '../hooks/useAttendance';
 import { useDailyNotes } from '../hooks/useDailyNotes';
+import { useEvents } from '../hooks/useEvents';
+import { useAnnouncements } from '../hooks/useAnnouncements';
 
 interface RecentActivityProps {
   setActiveTab: (tab: string) => void;
@@ -24,6 +26,8 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ setActiveTab }) => {
   const { students } = useStudents();
   const { attendance } = useAttendance();
   const { dailyNotes } = useDailyNotes();
+  const { events } = useEvents();
+  const { announcements } = useAnnouncements();
   const [activities, setActivities] = useState<Activity[]>([]);
 
   // Generate recent activities from real data
@@ -51,7 +55,7 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ setActiveTab }) => {
         const dateB = new Date(b.created_at + 'Z');
         return dateB.getTime() - dateA.getTime();
       })
-      .slice(0, 3);
+      .slice(0, 2);
 
     recentStudents.forEach(student => {
       // Use created_at for accurate timing, but handle timezone properly
@@ -131,12 +135,72 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ setActiveTab }) => {
       }
     });
 
+    // Add recent calendar events
+    const recentEvents = events
+      .filter(event => {
+        const eventDate = new Date(event.created_at);
+        const daysDiff = (new Date().getTime() - eventDate.getTime()) / (1000 * 3600 * 24);
+        return daysDiff <= 7; // Show events created in the last 7 days
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 3);
+
+    recentEvents.forEach(event => {
+      const eventDate = new Date(event.date);
+      const formattedDate = eventDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      });
+      const formattedTime = event.start_time ? 
+        new Date(`2000-01-01T${event.start_time}`).toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        }) : '';
+
+      newActivities.push({
+        id: `event-${event.id}`,
+        type: 'event',
+        icon: Clock,
+        title: 'Event created',
+        description: `${event.title} - ${formattedDate} ${formattedTime}`,
+        time: getTimeAgo(new Date(event.created_at)),
+        color: 'text-blue-600',
+        navigateTo: 'calendar',
+        timestamp: new Date(event.created_at)
+      });
+    });
+
+    // Add recent announcements
+    const recentAnnouncements = announcements
+      .filter(announcement => {
+        const announcementDate = new Date(announcement.created_at);
+        const daysDiff = (new Date().getTime() - announcementDate.getTime()) / (1000 * 3600 * 24);
+        return daysDiff <= 7; // Show announcements from last 7 days
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 2);
+
+    recentAnnouncements.forEach(announcement => {
+      newActivities.push({
+        id: `announcement-${announcement.id}`,
+        type: 'announcement',
+        icon: Bell,
+        title: 'Announcement created',
+        description: `${announcement.title} - ${announcement.priority} priority`,
+        time: getTimeAgo(new Date(announcement.created_at)),
+        color: 'text-indigo-600',
+        navigateTo: 'announcements',
+        timestamp: new Date(announcement.created_at)
+      });
+    });
+
     // Sort all activities by timestamp (most recent first)
     newActivities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    // Limit to 6 most recent activities
-    setActivities(newActivities.slice(0, 6));
-  }, [students, attendance, dailyNotes]);
+    // Limit to 8 most recent activities
+    setActivities(newActivities.slice(0, 8));
+  }, [students, attendance, dailyNotes, events, announcements]);
 
   // Helper function to parse dates more robustly
   const parseDate = (dateString: string | null): Date | null => {

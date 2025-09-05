@@ -3,18 +3,21 @@ import { Users, Calendar, FileText, TrendingUp, Clock, AlertCircle, MessageSquar
 import StatsCard from './StatsCard';
 import RecentActivity from './RecentActivity';
 import UpcomingEvents from './UpcomingEvents';
+import AnnouncementsWidget from './AnnouncementsWidget';
 import { useStudents } from '../hooks/useStudents';
 import { useAttendance } from '../hooks/useAttendance';
 import { useDailyNotes } from '../hooks/useDailyNotes';
+import { useEvents } from '../hooks/useEvents';
 
 interface DashboardProps {
   setActiveTab: (tab: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
-  const { students, loading: studentsLoading, getStudentCountByStatus } = useStudents();
+  const { students, programs, loading: studentsLoading } = useStudents();
   const { attendance, loading: attendanceLoading } = useAttendance();
   const { dailyNotes, loading: notesLoading } = useDailyNotes();
+  const { events, loading: eventsLoading } = useEvents();
 
   const [stats, setStats] = useState([
     {
@@ -22,15 +25,15 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
       value: '0',
       change: 'Loading...',
       icon: Users,
-      color: 'blue',
+      color: 'blue' as const,
       onClick: () => setActiveTab('students')
     },
     {
-      title: 'Upcoming Sessions',
+      title: 'Today\'s Events',
       value: '0',
       change: 'Loading...',
       icon: Calendar,
-      color: 'green',
+      color: 'green' as const,
       onClick: () => setActiveTab('calendar')
     },
     {
@@ -38,7 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
       value: '0',
       change: 'Loading...',
       icon: FileText,
-      color: 'orange',
+      color: 'orange' as const,
       onClick: () => setActiveTab('forms')
     },
     {
@@ -46,7 +49,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
       value: '0',
       change: 'Loading...',
       icon: MessageSquare,
-      color: 'purple',
+      color: 'purple' as const,
       onClick: () => setActiveTab('dailynotes')
     },
     {
@@ -54,17 +57,18 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
       value: '0',
       change: 'Loading...',
       icon: FileText,
-      color: 'orange',
+      color: 'orange' as const,
       onClick: () => setActiveTab('forms')
     }
   ]);
 
   // Update stats when data loads
   useEffect(() => {
-    if (!studentsLoading && !attendanceLoading && !notesLoading) {
+    if (!studentsLoading && !attendanceLoading && !notesLoading && !eventsLoading) {
       const today = new Date().toISOString().split('T')[0];
       const todayNotes = dailyNotes.filter(note => note.date === today);
       const todayAttendance = attendance.filter(record => record.date === today);
+      const todaysEvents = events.filter(event => event.date === today);
       const activeStudentsCount = students.filter(student => student.status === 'active').length;
       
       setStats([
@@ -73,15 +77,15 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           value: students.length.toString(),
           change: `${activeStudentsCount} active`,
           icon: Users,
-          color: 'blue',
+          color: 'blue' as const,
           onClick: () => setActiveTab('students')
         },
         {
-          title: 'Today\'s Attendance',
-          value: todayAttendance.length.toString(),
-          change: `${todayAttendance.filter(r => r.status === 'present').length} present`,
+          title: 'Today\'s Events',
+          value: todaysEvents.length.toString(),
+          change: `${todaysEvents.filter(e => e.priority === 'high').length} high priority`,
           icon: Calendar,
-          color: 'green',
+          color: 'green' as const,
           onClick: () => setActiveTab('calendar')
         },
         {
@@ -89,7 +93,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           value: '0', // Will be updated when forms are implemented
           change: 'Needs attention',
           icon: FileText,
-          color: 'orange',
+          color: 'orange' as const,
           onClick: () => setActiveTab('forms')
         },
         {
@@ -97,7 +101,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           value: todayNotes.length.toString(),
           change: 'New today',
           icon: MessageSquare,
-          color: 'purple',
+          color: 'purple' as const,
           onClick: () => setActiveTab('dailynotes')
         },
         {
@@ -105,12 +109,12 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           value: '0', // Will be updated when forms are implemented
           change: 'Awaiting completion',
           icon: FileText,
-          color: 'orange',
+          color: 'orange' as const,
           onClick: () => setActiveTab('forms')
         }
       ]);
     }
-  }, [students, attendance, dailyNotes, studentsLoading, attendanceLoading, notesLoading]);
+  }, [students, attendance, dailyNotes, events, studentsLoading, attendanceLoading, notesLoading, eventsLoading]);
 
   const handleQuickAction = (action: string) => {
     switch (action) {
@@ -146,8 +150,9 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         <div className="lg:col-span-2">
           <RecentActivity setActiveTab={setActiveTab} />
         </div>
-        <div>
+        <div className="space-y-8">
           <UpcomingEvents setActiveTab={setActiveTab} />
+          <AnnouncementsWidget setActiveTab={setActiveTab} />
         </div>
       </div>
 
@@ -155,42 +160,56 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Program Distribution</h3>
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Brighter Future Academy</span>
-              <div className="flex items-center space-x-2">
-                <div className="w-24 bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: '50%' }}></div>
-                </div>
-                <span className="text-sm font-medium text-gray-900">2</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">First Steps</span>
-              <div className="flex items-center space-x-2">
-                <div className="w-24 bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '25%' }}></div>
-                </div>
-                <span className="text-sm font-medium text-gray-900">1</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Individual Therapy</span>
-              <div className="flex items-center space-x-2">
-                <div className="w-24 bg-gray-200 rounded-full h-2">
-                  <div className="bg-purple-600 h-2 rounded-full" style={{ width: '25%' }}></div>
-                </div>
-                <span className="text-sm font-medium text-gray-900">1</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Inactive Students</span>
-              <div className="flex items-center space-x-2">
-                <div className="w-24 bg-gray-200 rounded-full h-2">
-                  <div className="bg-red-600 h-2 rounded-full" style={{ width: '25%' }}></div>
-                </div>
-                <span className="text-sm font-medium text-gray-900">1</span>
-              </div>
-            </div>
+            {(() => {
+              // Calculate program distribution from students
+              const programCounts = students.reduce((acc, student) => {
+                // Find the program name by program_id
+                const program = programs.find(p => p.id === student.program_id);
+                const programName = program ? program.name : `Program ${student.program_id}`;
+                acc[programName] = (acc[programName] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>);
+
+              const totalStudents = students.length;
+              const activeStudents = students.filter(s => s.status === 'active').length;
+              const inactiveStudents = totalStudents - activeStudents;
+
+              return (
+                <>
+                  {Object.entries(programCounts).map(([program, count]) => {
+                    const percentage = totalStudents > 0 ? (count / totalStudents) * 100 : 0;
+                    return (
+                      <div key={program} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">{program}</span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full" 
+                              style={{ width: `${percentage}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm font-medium text-gray-900">{count}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {inactiveStudents > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Inactive Students</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-red-600 h-2 rounded-full" 
+                            style={{ width: `${(inactiveStudents / totalStudents) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{inactiveStudents}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 

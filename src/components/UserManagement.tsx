@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Search, Edit, Trash2, Mail, Phone, Shield, Eye, Link, Copy, X, Save, User } from 'lucide-react';
 import AddUser from './AddUser';
 import UserProfile from './UserProfile';
@@ -14,26 +14,53 @@ const UserManagement: React.FC = () => {
   const [editingUser, setEditingUser] = useState(null);
 
   // Use real data from Supabase
-  const { users, loading, error, deleteUser, refreshUsers } = useUsers();
+  const { users, loading, error, deleteUser, refreshUsers, programs, classes, updateUser } = useUsers();
 
-  // Transform users data for the UI
-  const transformedUsers = users.map(user => ({
-    id: user.id,
-    name: `${user.first_name} ${user.last_name}`,
-    email: user.email,
-    role: user.role,
-    phone: user.phone || 'N/A',
-    status: user.status,
-    avatar: user.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop`,
-    department: user.department || 'N/A',
-    program: user.program_id ? getProgramName(user.program_id) : 'N/A',
-    class: user.class_id ? getClassName(user.class_id) : 'N/A',
-    joinDate: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : 'Unknown',
-    lastLogin: 'N/A', // Will be updated when login tracking is implemented
-    permissions: user.permissions || [],
-    // Keep original user data for editing
-    originalUser: user
-  }));
+  // Transform users data for the UI using useMemo to avoid recreation on every render
+  const transformedUsers = useMemo(() => {
+    // Helper functions defined inside useMemo to ensure they're available
+    const getProgramName = (programId: number) => {
+      const program = programs.find(p => p.id === programId);
+      return program ? program.name : 'Unknown Program';
+    };
+
+    const getClassName = (classId: string) => {
+      // Try different ID formats to handle type mismatches
+      let classGroup = classes.find(c => c.id === classId);
+      
+      if (!classGroup) {
+        // Try string comparison
+        classGroup = classes.find(c => String(c.id) === String(classId));
+        
+        if (!classGroup) {
+          // Try number comparison
+          classGroup = classes.find(c => c.id === Number(classId));
+        }
+      }
+      
+      return classGroup ? classGroup.name : 'Unknown Class';
+    };
+
+    return users.map(user => {
+      return {
+        id: user.id,
+        name: `${user.first_name} ${user.last_name}`,
+        email: user.email,
+        role: user.role,
+        phone: user.phone || 'N/A',
+        status: user.status,
+        avatar: user.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop`,
+        department: user.department || 'N/A',
+        program: user.program_id ? getProgramName(user.program_id) : 'N/A',
+        class: user.class_id ? getClassName(String(user.class_id)) : 'N/A',
+        joinDate: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : 'Unknown',
+        lastLogin: 'N/A', // Will be updated when login tracking is implemented
+        permissions: user.permissions || [],
+        // Keep original user data for editing
+        originalUser: user
+      };
+    });
+  }, [users, programs, classes]);
 
   const getRoleColor = (role: string) => {
     switch (role.toLowerCase()) {
@@ -150,7 +177,11 @@ const UserManagement: React.FC = () => {
           </div>
         ) : (
           filteredUsers.map((user) => (
-            <div key={user.id} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+            <div 
+              key={user.id} 
+              onClick={() => handleViewUser(user)}
+              className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all duration-200"
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <img
@@ -183,21 +214,20 @@ const UserManagement: React.FC = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                   <button 
-                    onClick={() => handleViewUser(user)}
-                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                    title="View Profile"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={() => handleEditUser(user)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditUser(user);
+                    }}
                     className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-200"
                     title="Edit User"
                   >
                     <Edit className="w-4 h-4" />
                   </button>
                   <button 
-                    onClick={() => handleDeleteUser(user)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteUser(user);
+                    }}
                     className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                     title="Delete User"
                   >
@@ -222,13 +252,14 @@ const UserManagement: React.FC = () => {
       {/* User Profile Modal */}
       {isUserProfileOpen && selectedUser && (
         <UserProfile
-          user={selectedUser}
+          user={selectedUser.originalUser || selectedUser}
           isOpen={isUserProfileOpen}
           onClose={() => setIsUserProfileOpen(false)}
           onEdit={() => {
             setIsUserProfileOpen(false);
             handleEditUser(selectedUser);
           }}
+          onUpdateUser={updateUser}
         />
       )}
 

@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { X, FileText, MessageSquare, Calendar, User, Phone, Mail, CheckCircle, XCircle, Clock, AlertTriangle, Edit, Trash2, Eye } from 'lucide-react';
 import AddAttendance from './AddAttendance';
 import AddDailyNote from './AddDailyNote';
+import ViewDailyNote from './ViewDailyNote';
 import { useAttendance } from '../hooks/useAttendance';
+import { useDailyNotes } from '../hooks/useDailyNotes';
 
 interface StudentModalProps {
   student: any;
@@ -13,22 +15,69 @@ interface StudentModalProps {
 
 const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedAssessment, setSelectedAssessment] = useState(null);
-  const [selectedNote, setSelectedNote] = useState(null);
-  const [selectedForm, setSelectedForm] = useState(null);
-  const [selectedAttendanceRecord, setSelectedAttendanceRecord] = useState(null);
-  const [detailView, setDetailView] = useState(null); // 'assessment', 'note', 'form', 'attendance'
+  const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
+  const [selectedNote, setSelectedNote] = useState<any>(null);
+  const [selectedForm, setSelectedForm] = useState<any>(null);
+  const [selectedAttendanceRecord, setSelectedAttendanceRecord] = useState<any>(null);
+  const [detailView, setDetailView] = useState<string | null>(null); // 'assessment', 'note', 'form', 'attendance'
   
   // New state for managing modals
   const [isEditAttendanceOpen, setIsEditAttendanceOpen] = useState(false);
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
+  const [isViewNoteOpen, setIsViewNoteOpen] = useState(false);
   const [selectedStartDate, setSelectedStartDate] = useState<string>('');
   const [selectedEndDate, setSelectedEndDate] = useState<string>('');
   
   const { attendance, loading: attendanceLoading, error: attendanceError, getAttendanceByStudent } = useAttendance();
+  const { dailyNotes, loading: notesLoading, error: notesError, getDailyNotesByStudent, refreshDailyNotes, deleteDailyNote } = useDailyNotes();
   
   // Get attendance data for this specific student
   const studentAttendanceData = getAttendanceByStudent(student.id);
+  
+  // Get daily notes data for this specific student
+  const studentNotesData = getDailyNotesByStudent(student.id);
+  
+  // Transform notes data for display
+  const notesData = studentNotesData.map(note => {
+    let parsedNotes: any = {};
+    let category = 'other';
+    let noteSummary = '';
+    
+    try {
+      parsedNotes = JSON.parse(note.notes || '{}');
+      category = parsedNotes.category || 'other';
+      // Create a readable summary from the note data
+      noteSummary = parsedNotes.generalNotes || 
+                   parsedNotes.behaviorNotes || 
+                   parsedNotes.academicProgress || 
+                   parsedNotes.socialInteraction || 
+                   parsedNotes.activitiesParticipated || 
+                   parsedNotes.achievementsSuccesses || 
+                   parsedNotes.concernsChallenges || 
+                   'No detailed notes available';
+    } catch (e) {
+      console.log('Note contains plain text, not JSON format');
+      category = 'other';
+      noteSummary = note.notes || 'No notes available';
+    }
+    
+    return {
+      id: note.id,
+      date: note.date,
+      author: note.author_name,
+      category: category,
+      title: `${category.charAt(0).toUpperCase() + category.slice(1)} Notes`,
+      content: noteSummary,
+      tags: note.tags || [],
+      fullNote: note.notes, // Keep complete data for detailed view
+      studentName: note.student_name,
+      programName: note.program_name,
+      timestamp: note.created_at,
+      // Add fields needed for ViewDailyNote
+      note: note.notes, // The JSON string that ViewDailyNote expects
+      program: note.program_name.toLowerCase().replace(/\s+/g, '-') // Convert to slug format
+    };
+  });
   
   // Calculate attendance statistics
   const totalDays = studentAttendanceData.length;
@@ -131,7 +180,7 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
     
     // Default values for missing fields
     assessments: 0,
-    notes: 0,
+    notes: notesData.length,
     avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`
   };
 
@@ -167,45 +216,6 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
       status: 'pending_review',
       score: 'Pending',
       notes: 'Assessment completed, awaiting final review and recommendations.'
-    }
-  ];
-
-  const notesData = [
-    {
-      id: 1,
-      date: '2024-01-15',
-      author: 'Ms. Emily Smith',
-      category: 'behavior',
-      title: 'Excellent Group Participation',
-      content: 'Emma showed outstanding participation in group activities today. She helped a peer with their assignment and demonstrated excellent listening skills during circle time.',
-      tags: ['positive behavior', 'peer interaction', 'participation']
-    },
-    {
-      id: 2,
-      date: '2024-01-14',
-      author: 'Dr. Michael Wilson',
-      category: 'therapy',
-      title: 'Speech Therapy Progress',
-      content: 'Continued work on /r/ sounds. Emma is showing consistent improvement and was able to produce the sound correctly in 8 out of 10 attempts.',
-      tags: ['speech therapy', 'articulation', 'improvement']
-    },
-    {
-      id: 3,
-      date: '2024-01-13',
-      author: 'Dr. Sarah Johnson',
-      category: 'academic',
-      title: 'Math Skills Development',
-      content: 'Emma completed addition problems up to 20 with minimal assistance. She is ready to move on to subtraction concepts next week.',
-      tags: ['math', 'addition', 'ready for next level']
-    },
-    {
-      id: 4,
-      date: '2024-01-12',
-      author: 'Ms. Lisa Brown',
-      category: 'social',
-      title: 'Playground Interaction',
-      content: 'Emma initiated play with two classmates during recess. She shared toys appropriately and followed playground rules without reminders.',
-      tags: ['social skills', 'sharing', 'independence']
     }
   ];
 
@@ -654,73 +664,99 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
       case 'notes':
         return (
           <div className="space-y-4">
-            <div className="mb-6">
-              <h4 className="font-medium text-gray-900 mb-3">Notes Summary</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-blue-600">{notesData.filter(n => n.category === 'behavior').length}</div>
-                  <div className="text-xs text-blue-700">Behavior</div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-green-600">{notesData.filter(n => n.category === 'academic').length}</div>
-                  <div className="text-xs text-green-700">Academic</div>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-purple-600">{notesData.filter(n => n.category === 'therapy').length}</div>
-                  <div className="text-xs text-purple-700">Therapy</div>
-                </div>
-                <div className="bg-orange-50 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-orange-600">{notesData.filter(n => n.category === 'social').length}</div>
-                  <div className="text-xs text-orange-700">Social</div>
-                </div>
-              </div>
-            </div>
-            {notesData.map((note) => (
-              <div 
-                key={note.id} 
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow duration-200 cursor-pointer hover:bg-gray-50"
-                onClick={() => {
-                  setSelectedNote(note);
-                  setDetailView('note');
-                }}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Student Notes</h3>
+              <button
+                onClick={() => setIsAddNoteOpen(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <h4 className="font-medium text-gray-900">{note.title}</h4>
-                    <p className="text-sm text-gray-600">by {note.author}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm text-gray-500">{new Date(note.date).toLocaleDateString()}</span>
-                    <div className="mt-1">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(note.category)}`}>
-                        {note.category}
-                      </span>
+                <MessageSquare className="w-4 h-4" />
+                <span>Add Note</span>
+              </button>
+            </div>
+            {notesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-gray-500">Loading notes...</div>
+              </div>
+            ) : notesError ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-red-500">Error loading notes: {notesError}</div>
+              </div>
+            ) : notesData.length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-gray-500">No notes found for this student.</div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6">
+                  <h4 className="font-medium text-gray-900 mb-3">Notes Summary</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-blue-600">{notesData.filter(n => n.category === 'behavior').length}</div>
+                      <div className="text-xs text-blue-700">Behavior</div>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-green-600">{notesData.filter(n => n.category === 'academic').length}</div>
+                      <div className="text-xs text-green-700">Academic</div>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-purple-600">{notesData.filter(n => n.category === 'therapy').length}</div>
+                      <div className="text-xs text-purple-700">Therapy</div>
+                    </div>
+                    <div className="bg-orange-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-orange-600">{notesData.filter(n => n.category === 'social').length}</div>
+                      <div className="text-xs text-orange-700">Social</div>
                     </div>
                   </div>
                 </div>
-                <p className="text-sm text-gray-700 mb-3">{note.content}</p>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {note.tags.map((tag, index) => (
-                    <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-gray-500">
-                    {new Date(note.date).toLocaleDateString()} • {note.category}
+                                 {notesData.map((note) => (
+                   <div 
+                     key={note.id} 
+                     className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow duration-200 cursor-pointer hover:bg-gray-50"
+                     onClick={() => {
+                       setSelectedNote(note);
+                       setIsViewNoteOpen(true);
+                     }}
+                   >
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <h4 className="font-medium text-gray-900">{note.title}</h4>
+                        <p className="text-sm text-gray-600">by {note.author}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm text-gray-500">{new Date(note.date).toLocaleDateString()}</span>
+                        <div className="mt-1">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(note.category)}`}>
+                            {note.category}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 mb-3">{note.content}</p>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {note.tags.map((tag, index) => (
+                        <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-gray-500">
+                        {new Date(note.date).toLocaleDateString()} • {note.category}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button className="p-1 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors duration-200">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <button className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200">
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button className="p-1 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors duration-200">
-                      <Edit className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                ))}
+              </>
+            )}
           </div>
         );
       case 'forms':
@@ -1111,6 +1147,41 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
           {detailView ? renderDetailView() : renderTabContent()}
         </div>
       </div>
+      
+      {/* Add Daily Note Modal */}
+      <AddDailyNote
+        isOpen={isAddNoteOpen}
+        onClose={() => setIsAddNoteOpen(false)}
+        selectedStudentId={student.id}
+        onNoteAdded={() => {
+          // Refresh notes data
+          refreshDailyNotes();
+        }}
+      />
+      
+      {/* View Daily Note Modal */}
+      <ViewDailyNote
+        note={selectedNote}
+        isOpen={isViewNoteOpen}
+        onClose={() => setIsViewNoteOpen(false)}
+        onEdit={(note) => {
+          // Close view modal and open edit modal
+          setIsViewNoteOpen(false);
+          setSelectedNote(note);
+          setIsAddNoteOpen(true);
+        }}
+        onDelete={async (noteId) => {
+          // Handle note deletion
+          try {
+            await deleteDailyNote(noteId);
+            setIsViewNoteOpen(false);
+            // The useDailyNotes hook will automatically update the data
+          } catch (error) {
+            console.error('Failed to delete note:', error);
+            alert('Failed to delete note. Please try again.');
+          }
+        }}
+      />
     </div>
   );
 };
