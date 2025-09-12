@@ -4,10 +4,13 @@ import StatsCard from './StatsCard';
 import RecentActivity from './RecentActivity';
 import UpcomingEvents from './UpcomingEvents';
 import AnnouncementsWidget from './AnnouncementsWidget';
+import MessagesWidget from './MessagesWidget';
 import { useStudents } from '../hooks/useStudents';
 import { useAttendance } from '../hooks/useAttendance';
 import { useDailyNotes } from '../hooks/useDailyNotes';
 import { useEvents } from '../hooks/useEvents';
+import { useClasses } from '../hooks/useClasses';
+import { useMessages } from '../hooks/useMessages';
 
 interface DashboardProps {
   setActiveTab: (tab: string) => void;
@@ -18,6 +21,8 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
   const { attendance, loading: attendanceLoading } = useAttendance();
   const { dailyNotes, loading: notesLoading } = useDailyNotes();
   const { events, loading: eventsLoading } = useEvents();
+  const { classes, loading: classesLoading } = useClasses();
+  const { messages, getUnreadCount, loading: messagesLoading } = useMessages();
 
   const [stats, setStats] = useState([
     {
@@ -64,12 +69,13 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
 
   // Update stats when data loads
   useEffect(() => {
-    if (!studentsLoading && !attendanceLoading && !notesLoading && !eventsLoading) {
+    if (!studentsLoading && !attendanceLoading && !notesLoading && !eventsLoading && !messagesLoading) {
       const today = new Date().toISOString().split('T')[0];
       const todayNotes = dailyNotes.filter(note => note.date === today);
       const todayAttendance = attendance.filter(record => record.date === today);
       const todaysEvents = events.filter(event => event.date === today);
       const activeStudentsCount = students.filter(student => student.status === 'active').length;
+      const unreadMessagesCount = getUnreadCount();
       
       setStats([
         {
@@ -105,16 +111,16 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           onClick: () => setActiveTab('dailynotes')
         },
         {
-          title: 'Pending Intakes',
-          value: '0', // Will be updated when forms are implemented
-          change: 'Awaiting completion',
-          icon: FileText,
-          color: 'orange' as const,
-          onClick: () => setActiveTab('forms')
+          title: 'Unread Messages',
+          value: unreadMessagesCount.toString(),
+          change: unreadMessagesCount > 0 ? 'Needs attention' : 'All caught up',
+          icon: MessageSquare,
+          color: 'purple' as const,
+          onClick: () => setActiveTab('messages')
         }
       ]);
     }
-  }, [students, attendance, dailyNotes, events, studentsLoading, attendanceLoading, notesLoading, eventsLoading]);
+  }, [students, attendance, dailyNotes, events, messages, studentsLoading, attendanceLoading, notesLoading, eventsLoading, messagesLoading]);
 
   const handleQuickAction = (action: string) => {
     switch (action) {
@@ -127,6 +133,10 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         break;
       case 'create-assessment':
         setActiveTab('forms');
+        break;
+      case 'compose-message':
+        setActiveTab('messages');
+        // In a real app, you might also trigger opening the compose modal
         break;
       default:
         break;
@@ -147,8 +157,9 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-8">
           <RecentActivity setActiveTab={setActiveTab} />
+          <MessagesWidget setActiveTab={setActiveTab} />
         </div>
         <div className="space-y-8">
           <UpcomingEvents setActiveTab={setActiveTab} />
@@ -161,12 +172,24 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Program Distribution</h3>
           <div className="space-y-4">
             {(() => {
-              // Calculate program distribution from students
+              // Calculate program distribution from students (including class assignments)
               const programCounts = students.reduce((acc, student) => {
-                // Find the program name by program_id
-                const program = programs.find(p => p.id === student.program_id);
-                const programName = program ? program.name : `Program ${student.program_id}`;
-                acc[programName] = (acc[programName] || 0) + 1;
+                let programId = student.program_id;
+                
+                // If student is assigned to a class, get the program from the class
+                if (!programId && student.class_id) {
+                  // Find the class and get its program_id
+                  const studentClass = classes.find(c => c.id === student.class_id);
+                  if (studentClass) {
+                    programId = studentClass.program_id;
+                  }
+                }
+                
+                if (programId) {
+                  const program = programs.find(p => p.id === programId);
+                  const programName = program ? program.name : `Program ${programId}`;
+                  acc[programName] = (acc[programName] || 0) + 1;
+                }
                 return acc;
               }, {} as Record<string, number>);
 
@@ -236,6 +259,13 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
             >
               <FileText className="w-5 h-5 text-purple-600" />
               <span className="text-sm font-medium text-purple-700">Create Assessment</span>
+            </button>
+            <button 
+              onClick={() => handleQuickAction('compose-message')}
+              className="w-full flex items-center space-x-3 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors duration-200"
+            >
+              <MessageSquare className="w-5 h-5 text-blue-600" />
+              <span className="text-sm font-medium text-blue-700">Compose Message</span>
             </button>
           </div>
         </div>

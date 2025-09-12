@@ -3,6 +3,7 @@ import { Users, CheckCircle, XCircle, Clock, Save, X, AlertTriangle } from 'luci
 import { useStudents } from '../hooks/useStudents';
 import { useClasses } from '../hooks/useClasses';
 import { useAttendance } from '../hooks/useAttendance';
+import { useAuth } from '../contexts/AuthContext';
 
 interface BulkAttendanceProps {
   isOpen: boolean;
@@ -19,6 +20,8 @@ interface BulkAttendanceData {
 }
 
 const BulkAttendance: React.FC<BulkAttendanceProps> = ({ isOpen, onClose, onAttendanceAdded }) => {
+  const { userProfile } = useAuth();
+  
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProgram, setSelectedProgram] = useState<string>('');
   const [selectedClass, setSelectedClass] = useState<string>('');
@@ -83,6 +86,17 @@ const BulkAttendance: React.FC<BulkAttendanceProps> = ({ isOpen, onClose, onAtte
       })));
     }
   }, [bulkStatus, bulkCheckIn, bulkCheckOut, bulkNotes]);
+
+  // Auto-select user's assigned program and class when opening the form
+  useEffect(() => {
+    if (isOpen && userProfile) {
+      // Only auto-select if user has program_id and class_id assigned
+      if (userProfile.program_id && userProfile.class_id) {
+        setSelectedProgram(userProfile.program_id.toString());
+        setSelectedClass(userProfile.class_id);
+      }
+    }
+  }, [isOpen, userProfile]);
 
   // Apply bulk settings to all students
   const applyBulkSettings = () => {

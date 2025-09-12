@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, User, Mail, Phone, Shield, Users } from 'lucide-react';
+import { X, Save, User, Mail, Phone, Shield, Users, Eye, Settings, Lock, Unlock } from 'lucide-react';
 import PictureUpload from './PictureUpload';
 import { useUsers } from '../hooks/useUsers';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { 
+  AVAILABLE_PERMISSIONS, 
+  AVAILABLE_TABS, 
+  getDefaultPermissions, 
+  getDefaultTabs, 
+  canCustomizePermissions,
+  getRoleConfig,
+  getPermissionsByCategory
+} from '../lib/permissions';
 
 interface EditUserProps {
   user: any;
@@ -12,6 +22,8 @@ interface EditUserProps {
 }
 
 const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdated }) => {
+  const { userProfile: currentUserProfile, hasPermission } = useAuth();
+  
   const [formData, setFormData] = useState({
     firstName: user.first_name || user.name?.split(' ')[0] || '',
     lastName: user.last_name || user.name?.split(' ').slice(1).join(' ') || '',
@@ -20,13 +32,21 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
     role: user.role?.toLowerCase() || '',
     department: user.department || '',
     status: user.status || 'active',
-    permissions: user.permissions || []
+    permissions: user.permissions || [],
+    visibleTabs: user.visible_tabs || []
   });
 
   const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
   const [selectedProgram, setSelectedProgram] = useState<number | ''>(user.program_id || '');
   const [selectedClass, setSelectedClass] = useState<string | ''>(user.class_id || '');
   const [availableClasses, setAvailableClasses] = useState<any[]>([]);
+  const [showAdvancedPermissions, setShowAdvancedPermissions] = useState(false);
+  const [customPermissionsEnabled, setCustomPermissionsEnabled] = useState(false);
+
+  // Permission checking logic
+  const isEditingOwnProfile = currentUserProfile?.email === user.email;
+  const canEditRole = hasPermission('user_management') && !isEditingOwnProfile;
+  const canEditPermissions = hasPermission('user_management') && !isEditingOwnProfile;
 
   // Use the users hook
   const { updateUser, uploadUserPicture, programs, classes, fetchClasses } = useUsers();
@@ -64,6 +84,15 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
     }
   }, [user.program_id, user.class_id]);
 
+  // Update permissions and tabs when role changes
+  useEffect(() => {
+    if (formData.role) {
+      const canCustomize = canCustomizePermissions(formData.role);
+      setCustomPermissionsEnabled(canCustomize);
+      setShowAdvancedPermissions(false);
+    }
+  }, [formData.role]);
+
   // Get the current picture URL from the user data
   const currentPictureUrl = user.picture_url || user.avatar;
 
@@ -90,16 +119,7 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
     { id: 'pending', name: 'Pending' }
   ];
 
-  const permissions = [
-    { id: 'students', name: 'Student Management' },
-    { id: 'calendar', name: 'Calendar Access' },
-    { id: 'forms', name: 'Forms & Assessments' },
-    { id: 'notes', name: 'Daily Notes' },
-    { id: 'attendance', name: 'Attendance Tracking' },
-    { id: 'reports', name: 'Reports & Analytics' },
-    { id: 'settings', name: 'System Settings' },
-    { id: 'programs', name: 'Program Management' }
-  ];
+  // Remove the old permissions array since we're using the new permissions system
 
   if (!isOpen) return null;
 
@@ -120,6 +140,28 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
     }));
   };
 
+  const handleTabVisibilityChange = (tabId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      visibleTabs: prev.visibleTabs.includes(tabId)
+        ? prev.visibleTabs.filter(t => t !== tabId)
+        : [...prev.visibleTabs, tabId]
+    }));
+  };
+
+  const resetToDefaults = () => {
+    if (formData.role) {
+      const defaultPermissions = getDefaultPermissions(formData.role);
+      const defaultTabs = getDefaultTabs(formData.role);
+      
+      setFormData(prev => ({
+        ...prev,
+        permissions: defaultPermissions,
+        visibleTabs: defaultTabs
+      }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -134,6 +176,7 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
         department: formData.department || '',
         status: formData.status,
         permissions: formData.permissions,
+        visible_tabs: formData.visibleTabs,
         program_id: selectedProgram || undefined,
         class_id: selectedClass || undefined
       };
@@ -180,8 +223,8 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Edit User</h2>
             <p className="text-gray-600">Update {user.name}'s information and permissions</p>
@@ -194,8 +237,9 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          <div className="space-y-6">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+            <div className="space-y-6 pb-8">
             {/* Personal Information */}
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
@@ -270,13 +314,23 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Role *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Role *
+                    {!canEditRole && (
+                      <span className="ml-2 text-xs text-red-600 font-medium">
+                        {isEditingOwnProfile ? '(Cannot edit your own role)' : '(Admin only)'}
+                      </span>
+                    )}
+                  </label>
                   <select
                     name="role"
                     value={formData.role}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={!canEditRole}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      !canEditRole ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''
+                    }`}
                   >
                     {roles.map((role) => (
                       <option key={role.id} value={role.id}>
@@ -284,6 +338,14 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
                       </option>
                     ))}
                   </select>
+                  {!canEditRole && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {isEditingOwnProfile 
+                        ? 'You cannot change your own role for security reasons.'
+                        : 'Only administrators can change user roles.'
+                      }
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
@@ -373,54 +435,177 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
             </div>
 
 
-            {/* Permissions */}
+            {/* Enhanced Permissions Section */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Permissions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {permissions.map((permission) => (
-                  <div key={permission.id} className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      id={permission.id}
-                      checked={formData.permissions.includes(permission.id)}
-                      onChange={() => handlePermissionChange(permission.id)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label htmlFor={permission.id} className="text-sm text-gray-700">
-                      {permission.name}
-                    </label>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                  <Shield className="w-5 h-5" />
+                  <span>Permissions & Access Control</span>
+                  {!canEditPermissions && (
+                    <span className="text-xs text-red-600 font-medium">
+                      {isEditingOwnProfile ? '(Cannot edit your own permissions)' : '(Admin only)'}
+                    </span>
+                  )}
+                </h3>
+                {customPermissionsEnabled && canEditPermissions && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedPermissions(!showAdvancedPermissions)}
+                    className="flex items-center space-x-2 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>{showAdvancedPermissions ? 'Hide Advanced' : 'Show Advanced'}</span>
+                  </button>
+                )}
               </div>
-            </div>
 
-            {/* Account Statistics */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Statistics</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                  <div>
-                    <div className="text-2xl font-bold text-blue-600">24</div>
-                    <div className="text-sm text-gray-600">Sessions</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-green-600">156</div>
-                    <div className="text-sm text-gray-600">Students</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-purple-600">89</div>
-                    <div className="text-sm text-gray-600">Notes</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-orange-600">12</div>
-                    <div className="text-sm text-gray-600">Assessments</div>
+              {!canEditPermissions && (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-start space-x-3">
+                    <Lock className="w-5 h-5 text-yellow-600 mt-0.5" />
+                    <div>
+                      <h4 className="font-medium text-yellow-900">Permission Editing Restricted</h4>
+                      <p className="text-sm text-yellow-700 mt-1">
+                        {isEditingOwnProfile 
+                          ? 'You cannot edit your own permissions for security reasons. Contact an administrator if you need permission changes.'
+                          : 'Only administrators can edit user permissions.'
+                        }
+                      </p>
+                    </div>
                   </div>
                 </div>
+              )}
+
+              {/* Role Information */}
+              {formData.role && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0">
+                      {customPermissionsEnabled ? (
+                        <Unlock className="w-5 h-5 text-blue-600" />
+                      ) : (
+                        <Lock className="w-5 h-5 text-blue-600" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-blue-900">
+                        {getRoleConfig(formData.role)?.roleName} Role
+                      </h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        {getRoleConfig(formData.role)?.description}
+                      </p>
+                      {!customPermissionsEnabled && (
+                        <p className="text-xs text-blue-600 mt-2 font-medium">
+                          ⚠️ This role has fixed permissions for security reasons
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Visibility Control */}
+              <div className="mb-6">
+                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center space-x-2">
+                  <Eye className="w-4 h-4" />
+                  <span>Navigation Tabs Visibility</span>
+                </h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  Choose which tabs will be visible in the user's navigation menu
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {AVAILABLE_TABS.map((tab) => (
+                    <div key={tab.id} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                      <input
+                        type="checkbox"
+                        id={`tab-${tab.id}`}
+                        checked={formData.visibleTabs.includes(tab.id)}
+                        onChange={() => handleTabVisibilityChange(tab.id)}
+                        disabled={!canEditPermissions || (!customPermissionsEnabled && !getDefaultTabs(formData.role).includes(tab.id))}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 disabled:opacity-50"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <label htmlFor={`tab-${tab.id}`} className="text-sm font-medium text-gray-700 cursor-pointer">
+                          {tab.name}
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">{tab.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {/* Permissions Control */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-md font-medium text-gray-900 flex items-center space-x-2">
+                    <Shield className="w-4 h-4" />
+                    <span>System Permissions</span>
+                  </h4>
+                  {customPermissionsEnabled && canEditPermissions && (
+                    <button
+                      type="button"
+                      onClick={resetToDefaults}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Reset to Defaults
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Configure what actions and features the user can access
+                </p>
+
+                {/* Permission Categories */}
+                {['management', 'access', 'system', 'communication'].map((category) => {
+                  const categoryPermissions = getPermissionsByCategory(category);
+                  const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+                  
+                  return (
+                    <div key={category} className="mb-6">
+                      <h5 className="text-sm font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
+                        {categoryName} Permissions
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {categoryPermissions.map((permission) => (
+                          <div key={permission.id} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                            <input
+                              type="checkbox"
+                              id={`perm-${permission.id}`}
+                              checked={formData.permissions.includes(permission.id)}
+                              onChange={() => handlePermissionChange(permission.id)}
+                              disabled={!canEditPermissions || (!customPermissionsEnabled && !getDefaultPermissions(formData.role).includes(permission.id))}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 disabled:opacity-50"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <label htmlFor={`perm-${permission.id}`} className="text-sm font-medium text-gray-700 cursor-pointer">
+                                {permission.name}
+                              </label>
+                              <p className="text-xs text-gray-500 mt-1">{permission.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Advanced Permissions Toggle */}
+              {customPermissionsEnabled && showAdvancedPermissions && (
+                <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h4 className="font-medium text-yellow-900 mb-2">Advanced Permission Settings</h4>
+                  <p className="text-sm text-yellow-700">
+                    Custom permissions are enabled for this role. You can modify the default permissions 
+                    to create a tailored access profile for this user.
+                  </p>
+                </div>
+              )}
+            </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
+          <div className="flex items-center justify-end space-x-4 p-6 border-t border-gray-200 bg-white flex-shrink-0">
             <button
               type="button"
               onClick={onClose}

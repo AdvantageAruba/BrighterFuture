@@ -3,6 +3,7 @@ import { X, Save, Calendar, Users, Clock, CheckCircle, XCircle, AlertTriangle } 
 import { useStudents } from '../hooks/useStudents';
 import { useAttendance } from '../hooks/useAttendance';
 import { useClasses } from '../hooks/useClasses';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AddAttendanceProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ interface AddAttendanceProps {
 }
 
 const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selectedDate, existingRecord, studentId, onAttendanceAdded }) => {
+  const { userProfile } = useAuth();
+  
   const [formData, setFormData] = useState({
     date: selectedDate || new Date().toISOString().split('T')[0],
     program: '',
@@ -129,6 +132,20 @@ const AddAttendance: React.FC<AddAttendanceProps> = ({ isOpen, onClose, selected
       });
     }
   }, [studentId, existingRecord, studentsByProgram, selectedDate]);
+
+  // Auto-select user's assigned program and class when opening the form
+  useEffect(() => {
+    if (isOpen && userProfile && !existingRecord && !studentId) {
+      // Only auto-select if user has program_id and class_id assigned
+      if (userProfile.program_id && userProfile.class_id) {
+        setFormData(prev => ({
+          ...prev,
+          program: userProfile.program_id!.toString(),
+          class: userProfile.class_id!
+        }));
+      }
+    }
+  }, [isOpen, userProfile, existingRecord, studentId]);
 
   if (!isOpen) return null;
 

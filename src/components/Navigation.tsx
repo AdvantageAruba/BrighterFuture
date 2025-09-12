@@ -1,6 +1,7 @@
-import React from 'react';
-import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User, Database, MessageSquare } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User, MessageSquare, Mail } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useMessages } from '../hooks/useMessages';
 
 interface NavigationProps {
   activeTab: string;
@@ -13,7 +14,21 @@ interface NavigationProps {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }) => {
-  const { signOut } = useAuth();
+  const { signOut, hasPermission, userProfile } = useAuth();
+  const { getUnreadCount } = useMessages();
+
+  // Debug logging
+  console.log('🔍 Navigation Debug:', {
+    userProfile: userProfile,
+    permissions: userProfile?.permissions,
+    visible_tabs: userProfile?.visible_tabs,
+    role: userProfile?.role
+  });
+  
+  // Log the actual permissions array
+  if (userProfile?.permissions) {
+    console.log('📋 Administrator permissions:', userProfile.permissions);
+  }
 
   const handleSignOut = async () => {
     try {
@@ -23,19 +38,44 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
     }
   };
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'students', label: 'Students', icon: Users },
-    { id: 'attendance', label: 'Attendance', icon: Calendar },
-    { id: 'waitinglist', label: 'Waiting List', icon: Clock },
-    { id: 'forms', label: 'Forms', icon: FileText },
-    { id: 'dailynotes', label: 'Daily Notes', icon: BookOpen },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'announcements', label: 'Announcements', icon: MessageSquare },
-    { id: 'programs', label: 'Programs', icon: BookOpen },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'test', label: 'Database Test', icon: Database },
-  ];
+  const navItems = useMemo(() => [
+    { id: 'dashboard', label: 'Dashboard', icon: Home, permission: null }, // Always visible
+    { id: 'students', label: 'Students', icon: Users, permission: 'students' },
+    { id: 'attendance', label: 'Attendance', icon: Calendar, permission: 'attendance' },
+    { id: 'waitinglist', label: 'Waiting List', icon: Clock, permission: 'waiting_list' },
+    { id: 'forms', label: 'Forms', icon: FileText, permission: 'forms' },
+    { id: 'dailynotes', label: 'Daily Notes', icon: BookOpen, permission: 'notes' },
+    { id: 'calendar', label: 'Calendar', icon: Calendar, permission: 'calendar' },
+    { id: 'messages', label: 'Messages', icon: Mail, permission: 'messages', badge: getUnreadCount() },
+    { id: 'announcements', label: 'Announcements', icon: MessageSquare, permission: 'announcements' },
+    { id: 'programs', label: 'Programs', icon: BookOpen, permission: 'programs' },
+    { id: 'settings', label: 'Settings', icon: Settings, permission: 'settings' },
+  ], [getUnreadCount]);
+
+  // Filter navigation items based on user permissions and visible_tabs
+  const visibleNavItems = navItems.filter(item => {
+    // Always show dashboard
+    if (item.id === 'dashboard') return true;
+    
+    // Check if user has the required permission
+    if (item.permission && !hasPermission(item.permission)) {
+      console.log(`❌ Filtering out ${item.id}: missing permission ${item.permission}`);
+      return false;
+    }
+    
+    // If visible_tabs is set and not empty, only show tabs in that array
+    // If visible_tabs is not set or empty, show all tabs the user has permission for
+    // Administrators always see all tabs they have permission for
+    if (userProfile?.role !== 'administrator' && userProfile?.visible_tabs && userProfile.visible_tabs.length > 0) {
+      if (!userProfile.visible_tabs.includes(item.id)) {
+        console.log(`❌ Filtering out ${item.id}: not in visible_tabs`);
+        return false;
+      }
+    }
+    
+    console.log(`✅ Showing ${item.id}`);
+    return true;
+  });
 
   return (
     <nav className="fixed left-0 top-0 h-full w-64 bg-white shadow-lg border-r border-gray-200 z-50">
@@ -53,7 +93,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
 
       <div className="px-4 py-6">
         <ul className="space-y-2">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             return (
               <li key={item.id}>
@@ -65,7 +105,14 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
+                  <div className="relative">
+                    <Icon className="w-5 h-5" />
+                    {item.badge && item.badge > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
+                  </div>
                   <span className="font-medium">{item.label}</span>
                 </button>
               </li>

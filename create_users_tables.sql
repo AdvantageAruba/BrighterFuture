@@ -85,3 +85,6 @@ INSERT INTO users (first_name, last_name, email, role, department, program_id, c
 ('Sarah', 'Wilson', 'sarah.wilson@example.com', 'teacher', 'education', 2, '3')
 ON CONFLICT (email) DO NOTHING;
 
+
+
+

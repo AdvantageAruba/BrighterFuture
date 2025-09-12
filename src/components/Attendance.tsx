@@ -6,7 +6,7 @@ import AttendanceDetails from './AttendanceDetails';
 import AttendanceReports from './AttendanceReports';
 import BulkAttendance from './BulkAttendance';
 import { useStudents } from '../hooks/useStudents';
-import { useClasses } from '../hooks/useClasses';
+import { useClassesData } from '../contexts/ClassesDataContext';
 import { useAttendance } from '../hooks/useAttendance';
 
 const Attendance: React.FC = () => {
@@ -24,7 +24,7 @@ const Attendance: React.FC = () => {
 
   // Get real data from hooks
   const { programs: realPrograms, students } = useStudents();
-  const { classes } = useClasses();
+  const { classes } = useClassesData();
   const { attendance, loading, refreshAttendance } = useAttendance();
 
   // Add "All Programs" option to real programs

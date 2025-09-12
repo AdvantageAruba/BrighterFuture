@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, Edit, Trash2, Mail, Phone, Shield, Eye, Link, Copy, X, Save, User } from 'lucide-react';
+import { Plus, Search, Edit, Trash2 } from 'lucide-react';
 import AddUser from './AddUser';
 import UserProfile from './UserProfile';
 import EditUser from './EditUser';

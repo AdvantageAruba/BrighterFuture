@@ -15,7 +15,7 @@ interface StudentCardProps {
     notes: number;
   };
   onView: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
   onDelete?: (studentId: number) => void;
   onStatusToggle?: (studentId: number, newStatus: string) => void;
 }
@@ -123,13 +123,15 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onDe
           <Eye className="w-4 h-4" />
           <span>View</span>
         </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors border border-gray-300"
-        >
-          <Edit className="w-4 h-4" />
-          <span>Edit</span>
-        </button>
+        {onEdit && (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors border border-gray-300"
+          >
+            <Edit className="w-4 h-4" />
+            <span>Edit</span>
+          </button>
+        )}
         {onDelete && (
           <button 
             onClick={(e) => { e.stopPropagation(); onDelete(student.id); }}

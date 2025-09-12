@@ -10,9 +10,10 @@ interface EditClassProps {
   teachers: Teacher[];
   updateClass: (id: number, updates: Partial<Class>) => Promise<{ success: boolean; data?: Class; error?: string }>;
   deleteClass: (id: number) => Promise<{ success: boolean; error?: string }>;
+  onClassUpdated?: () => void;
 }
 
-const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, programs, teachers, updateClass, deleteClass }) => {
+const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, programs, teachers, updateClass, deleteClass, onClassUpdated }) => {
   const [formData, setFormData] = useState({
     name: classData.name,
     program_id: classData.program_id,
@@ -57,6 +58,7 @@ const EditClass: React.FC<EditClassProps> = ({ classData, isOpen, onClose, progr
 
       if (result.success) {
         // Local state is already updated in the hook
+        onClassUpdated?.(); // Call the callback to refresh data
         onClose();
       } else {
         setError(result.error || 'Failed to update class');

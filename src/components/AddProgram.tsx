@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Save, BookOpen, Users, Calendar, MapPin, Phone, Mail, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import SchedulePicker from './SchedulePicker';
 
 interface AddProgramProps {
   isOpen: boolean;
@@ -13,19 +14,20 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
     description: '',
     type: '',
     capacity: '',
-    ageRange: '',
+    age_range_start: '',
+    age_range_end: '',
     location: '',
     schedule: '',
-    startDate: '',
+    start_date: '',
     coordinator: '',
-    coordinatorEmail: '',
-    coordinatorPhone: '',
+    coordinator_email: '',
+    coordinator_phone: '',
     status: 'planning',
     requirements: '',
     objectives: '',
     curriculum: '',
-    assessmentMethods: '',
-    staffRequirements: '',
+    assessment_methods: '',
+    staff_requirements: '',
     budget: '',
     notes: ''
   });
@@ -51,7 +53,42 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
     { id: 'inactive', name: 'Inactive' }
   ];
 
+  const ageOptions = [
+    { value: '', label: 'Select age' },
+    { value: '0', label: '0 years' },
+    { value: '1', label: '1 year' },
+    { value: '2', label: '2 years' },
+    { value: '3', label: '3 years' },
+    { value: '4', label: '4 years' },
+    { value: '5', label: '5 years' },
+    { value: '6', label: '6 years' },
+    { value: '7', label: '7 years' },
+    { value: '8', label: '8 years' },
+    { value: '9', label: '9 years' },
+    { value: '10', label: '10 years' },
+    { value: '11', label: '11 years' },
+    { value: '12', label: '12 years' },
+    { value: '13', label: '13 years' },
+    { value: '14', label: '14 years' },
+    { value: '15', label: '15 years' },
+    { value: '16', label: '16 years' },
+    { value: '17', label: '17 years' },
+    { value: '18', label: '18 years' },
+    { value: '19', label: '19 years' },
+    { value: '20', label: '20 years' },
+    { value: '21', label: '21+ years' }
+  ];
+
   if (!isOpen) return null;
+
+  const validateAgeRange = () => {
+    if (formData.age_range_start && formData.age_range_end) {
+      const startAge = parseInt(formData.age_range_start);
+      const endAge = parseInt(formData.age_range_end);
+      return endAge >= startAge;
+    }
+    return true;
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -63,6 +100,13 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate age range
+    if (!validateAgeRange()) {
+      alert('Age range end must be greater than or equal to age range start.');
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -72,7 +116,26 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
         name: formData.name,
         description: formData.description,
         status: formData.status,
-        // Add other fields as needed - adjust based on your programs table schema
+        type: formData.type,
+        capacity: formData.capacity ? parseInt(formData.capacity) : null,
+        age_range: formData.age_range_start && formData.age_range_end
+          ? `${formData.age_range_start}-${formData.age_range_end} years`
+          : null,
+        age_range_start: formData.age_range_start ? parseInt(formData.age_range_start) : null,
+        age_range_end: formData.age_range_end ? parseInt(formData.age_range_end) : null,
+        location: formData.location,
+        schedule: formData.schedule,
+        start_date: formData.start_date || null,
+        coordinator: formData.coordinator,
+        coordinator_email: formData.coordinator_email,
+        coordinator_phone: formData.coordinator_phone,
+        requirements: formData.requirements,
+        objectives: formData.objectives,
+        curriculum: formData.curriculum,
+        assessment_methods: formData.assessment_methods,
+        staff_requirements: formData.staff_requirements,
+        budget: formData.budget ? parseFloat(formData.budget) : null,
+        notes: formData.notes
       };
 
       // Insert the program into the database
@@ -87,25 +150,27 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
 
       if (data && data[0]) {
         console.log('Program created successfully:', data[0]);
+        alert('Program created successfully!');
         // Reset form
         setFormData({
           name: '',
           description: '',
           type: '',
           capacity: '',
-          ageRange: '',
+          age_range_start: '',
+          age_range_end: '',
           location: '',
           schedule: '',
-          startDate: '',
+          start_date: '',
           coordinator: '',
-          coordinatorEmail: '',
-          coordinatorPhone: '',
+          coordinator_email: '',
+          coordinator_phone: '',
           status: 'planning',
           requirements: '',
           objectives: '',
           curriculum: '',
-          assessmentMethods: '',
-          staffRequirements: '',
+          assessment_methods: '',
+          staff_requirements: '',
           budget: '',
           notes: ''
         });
@@ -209,16 +274,43 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Age Range *</label>
-                  <input
-                    type="text"
-                    name="ageRange"
-                    value={formData.ageRange}
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Age Range Start *</label>
+                  <select
+                    name="age_range_start"
+                    value={formData.age_range_start}
                     onChange={handleInputChange}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g., 5-12, 3-6, All Ages"
-                  />
+                  >
+                    {ageOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Age Range End *</label>
+                  <select
+                    name="age_range_end"
+                    value={formData.age_range_end}
+                    onChange={handleInputChange}
+                    required
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formData.age_range_start && formData.age_range_end && !validateAgeRange()
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-300'
+                    }`}
+                  >
+                    {ageOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {formData.age_range_start && formData.age_range_end && !validateAgeRange() && (
+                    <p className="mt-1 text-sm text-red-600">End age must be greater than or equal to start age</p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Program Description *</label>
@@ -258,22 +350,17 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
                   <input
                     type="date"
-                    name="startDate"
-                    value={formData.startDate}
+                    name="start_date"
+                    value={formData.start_date}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Schedule *</label>
-                  <input
-                    type="text"
-                    name="schedule"
+                  <SchedulePicker
                     value={formData.schedule}
-                    onChange={handleInputChange}
+                    onChange={(value) => setFormData(prev => ({ ...prev, schedule: value }))}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g., Monday-Friday, 9:00 AM - 3:00 PM"
                   />
                 </div>
               </div>
@@ -302,8 +389,8 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
                   <input
                     type="email"
-                    name="coordinatorEmail"
-                    value={formData.coordinatorEmail}
+                    name="coordinator_email"
+                    value={formData.coordinator_email}
                     onChange={handleInputChange}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -314,8 +401,8 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
                   <input
                     type="tel"
-                    name="coordinatorPhone"
-                    value={formData.coordinatorPhone}
+                    name="coordinator_phone"
+                    value={formData.coordinator_phone}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="(555) 123-4567"
@@ -365,8 +452,8 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Assessment Methods</label>
                     <textarea
-                      name="assessmentMethods"
-                      value={formData.assessmentMethods}
+                      name="assessment_methods"
+                      value={formData.assessment_methods}
                       onChange={handleInputChange}
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -376,8 +463,8 @@ const AddProgram: React.FC<AddProgramProps> = ({ isOpen, onClose }) => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Staff Requirements</label>
                     <textarea
-                      name="staffRequirements"
-                      value={formData.staffRequirements}
+                      name="staff_requirements"
+                      value={formData.staff_requirements}
                       onChange={handleInputChange}
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

@@ -5,10 +5,74 @@ interface ProgramDetailsProps {
   program: any;
   isOpen: boolean;
   onClose: () => void;
+  classesData?: {
+    classes: any[];
+    students: any[];
+    teachers: any[];
+    getStudentCountByProgram: (programId: number) => number;
+    getClassCountByProgram: (programId: number) => number;
+  };
+  onEditProgram?: (program: any) => void;
+  onViewStudents?: (program: any) => void;
+  onViewReports?: (program: any) => void;
+  onManageWaitingList?: (program: any) => void;
 }
 
-const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClose }) => {
+const ProgramDetails: React.FC<ProgramDetailsProps> = ({ 
+  program, 
+  isOpen, 
+  onClose, 
+  classesData,
+  onEditProgram,
+  onViewStudents,
+  onViewReports,
+  onManageWaitingList
+}) => {
   if (!isOpen) return null;
+
+  // Calculate real statistics from database data
+  const getRealStatistics = () => {
+    if (!classesData) {
+      return {
+        currentStudents: 0,
+        totalClasses: 0,
+        totalTeachers: 0,
+        totalCapacity: 0,
+        activeStudents: 0
+      };
+    }
+
+    const { classes, students, getStudentCountByProgram, getClassCountByProgram } = classesData;
+    
+    // Get students in this program
+    const programStudents = students.filter(s => {
+      if (s.program_id === program.id) return true;
+      if (s.class_id) {
+        const studentClass = classes.find(c => c.id === s.class_id);
+        return studentClass && studentClass.program_id === program.id;
+      }
+      return false;
+    });
+
+    // Get classes in this program
+    const programClasses = classes.filter(c => c.program_id === program.id);
+    
+    // Calculate total capacity
+    const totalCapacity = programClasses.reduce((sum, cls) => sum + (cls.max_capacity || 0), 0);
+    
+    // Count active students
+    const activeStudents = programStudents.filter(s => s.status === 'active').length;
+
+    return {
+      currentStudents: programStudents.length,
+      totalClasses: programClasses.length,
+      totalTeachers: programClasses.filter(cls => cls.teacher_id).length,
+      totalCapacity,
+      activeStudents
+    };
+  };
+
+  const stats = getRealStatistics();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -32,7 +96,8 @@ const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClos
   };
 
   const getCapacityPercentage = () => {
-    return Math.round((program.students / program.capacity) * 100);
+    if (stats.totalCapacity === 0) return 0;
+    return Math.round((stats.currentStudents / stats.totalCapacity) * 100);
   };
 
   const getProgressBarColor = () => {
@@ -88,29 +153,29 @@ const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClos
                   <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
                     <Users className="w-6 h-6 text-blue-600" />
                   </div>
-                  <p className="text-2xl font-bold text-blue-600">{program.students}</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.currentStudents}</p>
                   <p className="text-sm text-blue-700">Current Students</p>
                 </div>
                 <div className="bg-green-50 rounded-lg p-4 text-center">
                   <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
                     <User className="w-6 h-6 text-green-600" />
                   </div>
-                  <p className="text-2xl font-bold text-green-600">{program.staffCount}</p>
-                  <p className="text-sm text-green-700">Staff Members</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.totalTeachers}</p>
+                  <p className="text-sm text-green-700">Teachers</p>
                 </div>
                 <div className="bg-orange-50 rounded-lg p-4 text-center">
                   <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                    <AlertCircle className="w-6 h-6 text-orange-600" />
+                    <BookOpen className="w-6 h-6 text-orange-600" />
                   </div>
-                  <p className="text-2xl font-bold text-orange-600">{program.waitingList}</p>
-                  <p className="text-sm text-orange-700">Waiting List</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats.totalClasses}</p>
+                  <p className="text-sm text-orange-700">Classes</p>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-4 text-center">
                   <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
                     <TrendingUp className="w-6 h-6 text-purple-600" />
                   </div>
-                  <p className="text-2xl font-bold text-purple-600">{program.satisfactionScore}</p>
-                  <p className="text-sm text-purple-700">Satisfaction Score</p>
+                  <p className="text-2xl font-bold text-purple-600">{stats.activeStudents}</p>
+                  <p className="text-sm text-purple-700">Active Students</p>
                 </div>
               </div>
             </div>
@@ -122,7 +187,7 @@ const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClos
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm text-gray-600">Current Enrollment</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {program.students} / {program.capacity} ({getCapacityPercentage()}%)
+                    {stats.currentStudents} / {stats.totalCapacity} ({getCapacityPercentage()}%)
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
@@ -134,15 +199,21 @@ const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClos
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                   <div>
                     <p className="text-gray-600">Age Range</p>
-                    <p className="font-medium text-gray-900">{program.ageRange}</p>
+                    <p className="font-medium text-gray-900">
+                      {program.age_range || 'Age range not specified'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-gray-600">Success Rate</p>
-                    <p className="font-medium text-gray-900">{program.graduationRate}%</p>
+                    <p className="font-medium text-gray-900">
+                      {program.graduationRate ? `${program.graduationRate}%` : 'Not available'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-gray-600">Program Started</p>
-                    <p className="font-medium text-gray-900">{new Date(program.startDate).toLocaleDateString()}</p>
+                    <p className="font-medium text-gray-900">
+                      {program.start_date ? new Date(program.start_date).toLocaleDateString() : 'Date not specified'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -158,11 +229,15 @@ const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClos
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm text-gray-600">Location</p>
-                    <p className="font-medium text-gray-900">{program.location}</p>
+                    <p className="font-medium text-gray-900">
+                      {program.location || 'Location not specified'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Schedule</p>
-                    <p className="font-medium text-gray-900">{program.schedule}</p>
+                    <p className="font-medium text-gray-900">
+                      {program.schedule || 'Schedule not specified'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -175,15 +250,21 @@ const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClos
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm text-gray-600">Name</p>
-                    <p className="font-medium text-gray-900">{program.coordinator}</p>
+                    <p className="font-medium text-gray-900">
+                      {program.coordinator || 'Coordinator not assigned'}
+                    </p>
                   </div>
                   <div className="flex items-center space-x-2 text-sm">
                     <Mail className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-900">{program.coordinatorEmail}</span>
+                    <span className="text-gray-900">
+                      {program.coordinator_email || 'Email not provided'}
+                    </span>
                   </div>
                   <div className="flex items-center space-x-2 text-sm">
                     <Phone className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-900">{program.coordinatorPhone}</span>
+                    <span className="text-gray-900">
+                      {program.coordinator_phone || 'Phone not provided'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -198,22 +279,26 @@ const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClos
               <div className="bg-gray-50 rounded-lg p-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-green-600 mb-1">{program.graduationRate}%</div>
+                    <div className="text-3xl font-bold text-green-600 mb-1">
+                      {program.graduationRate ? `${program.graduationRate}%` : 'N/A'}
+                    </div>
                     <div className="text-sm text-gray-600">Success Rate</div>
                     <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                       <div 
                         className="bg-green-500 h-2 rounded-full" 
-                        style={{ width: `${program.graduationRate}%` }}
+                        style={{ width: `${program.graduationRate || 0}%` }}
                       ></div>
                     </div>
                   </div>
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-blue-600 mb-1">{program.satisfactionScore}</div>
+                    <div className="text-3xl font-bold text-blue-600 mb-1">
+                      {program.satisfactionScore || 'N/A'}
+                    </div>
                     <div className="text-sm text-gray-600">Satisfaction Score</div>
                     <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                       <div 
                         className="bg-blue-500 h-2 rounded-full" 
-                        style={{ width: `${(program.satisfactionScore / 5) * 100}%` }}
+                        style={{ width: `${program.satisfactionScore ? (program.satisfactionScore / 5) * 100 : 0}%` }}
                       ></div>
                     </div>
                   </div>
@@ -235,19 +320,31 @@ const ProgramDetails: React.FC<ProgramDetailsProps> = ({ program, isOpen, onClos
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="flex flex-wrap gap-3">
-                <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                <button 
+                  onClick={() => onEditProgram?.(program)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                >
                   <Edit className="w-4 h-4" />
                   <span>Edit Program</span>
                 </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200">
+                <button 
+                  onClick={() => onViewStudents?.(program)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
                   <Users className="w-4 h-4" />
                   <span>View Students</span>
                 </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200">
+                <button 
+                  onClick={() => onViewReports?.(program)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200"
+                >
                   <BarChart3 className="w-4 h-4" />
                   <span>View Reports</span>
                 </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors duration-200">
+                <button 
+                  onClick={() => onManageWaitingList?.(program)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors duration-200"
+                >
                   <AlertCircle className="w-4 h-4" />
                   <span>Manage Waiting List</span>
                 </button>

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Eye, GraduationCap, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Edit, Eye, GraduationCap, Trash2 } from 'lucide-react';
 import AddProgram from './AddProgram';
 import EditProgram from './EditProgram';
 import ProgramDetails from './ProgramDetails';
 import AddClass from './AddClass';
 import EditClass from './EditClass';
+import ClassStudentsModal from './ClassStudentsModal';
+import StudentModal from './StudentModal';
 import { Class, Program, Teacher } from '../hooks/useClasses';
 import { supabase } from '../lib/supabase';
 
@@ -26,12 +28,13 @@ interface ProgramManagementProps {
     deleteClass: (id: number) => Promise<{ success: boolean; error?: string }>;
     refreshClasses: () => void;
     refreshPrograms: () => Promise<void>;
-    refreshTeachers: () => Promise<void>;
+    refreshTeachers: () => void;
     refreshStudents: () => Promise<void>;
   };
+  setActiveTab?: (tab: string) => void;
 }
 
-const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) => {
+const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData, setActiveTab }) => {
   // Component state
   const [selectedProgram, setSelectedProgram] = useState<any>(null);
   const [isAddProgramOpen, setIsAddProgramOpen] = useState(false);
@@ -42,6 +45,10 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
   const [isEditClassOpen, setIsEditClassOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<any>(null);
   const [selectedProgramForClass, setSelectedProgramForClass] = useState<number | null>(null);
+  const [isClassStudentsOpen, setIsClassStudentsOpen] = useState(false);
+  const [selectedClassForStudents, setSelectedClassForStudents] = useState<any>(null);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [isDeleteProgramOpen, setIsDeleteProgramOpen] = useState(false);
   const [programToDelete, setProgramToDelete] = useState<Program | null>(null);
 
@@ -53,7 +60,6 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
     students,
     getClassesByProgram, 
     getClassCountByProgram, 
-    getTeacherName, 
     getStudentCountByProgram,
     getTotalStudentCount,
     addClass, 
@@ -73,17 +79,22 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
     }
   }, [programs]);
 
-  // Refresh classes data when component mounts to ensure latest assignments are shown
-  useEffect(() => {
-    refreshClasses();
-    refreshTeachers();
-  }, []);
+  // Disable automatic refresh to prevent ERR_INSUFFICIENT_RESOURCES
+  // useEffect(() => {
+  //   // Use a small delay to prevent immediate API calls on mount
+  //   const timeoutId = setTimeout(() => {
+  //     refreshClasses();
+  //     refreshTeachers();
+  //   }, 100);
+  //   
+  //   return () => clearTimeout(timeoutId);
+  // }, []);
 
-  // Also refresh data whenever the component is rendered (becomes visible)
-  useEffect(() => {
-    refreshClasses();
-    refreshTeachers();
-  });
+  // Remove the problematic useEffect that runs on every render
+  // useEffect(() => {
+  //   refreshClasses();
+  //   refreshTeachers();
+  // });
 
   // Local helper functions
   const getClassesByProgramLocal = (programId: number) => {
@@ -94,23 +105,20 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
     return getClassCountByProgram(programId);
   };
 
-  const getTeacherNameLocal = (teacherId: number | null | undefined) => {
-    return getTeacherName(teacherId || null);
-  };
 
   // Event handlers
   const handleAddClassClick = (programId: number) => {
     setSelectedProgramForClass(programId);
     setIsAddClassOpen(true);
-    // Refresh teachers to ensure newly added teachers appear in dropdown
-    classesData.refreshTeachers();
+    // Disable automatic refresh to prevent ERR_INSUFFICIENT_RESOURCES
+    // classesData.refreshTeachers();
   };
 
   const handleEditClass = (classData: Class) => {
     setEditingClass(classData);
     setIsEditClassOpen(true);
-    // Refresh teachers to ensure newly added teachers appear in dropdown
-    classesData.refreshTeachers();
+    // Disable automatic refresh to prevent ERR_INSUFFICIENT_RESOURCES
+    // classesData.refreshTeachers();
   };
 
   const handleCloseClassModal = () => {
@@ -160,6 +168,70 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
     }
   };
 
+  // Quick action handlers for ProgramDetails
+  const handleQuickEditProgram = (program: any) => {
+    setIsProgramDetailsOpen(false); // Close the details modal
+    setEditingProgram(program);
+    setIsEditProgramOpen(true);
+  };
+
+  const handleQuickViewStudents = (program: any) => {
+    setIsProgramDetailsOpen(false); // Close the details modal
+    // Navigate to Students page
+    if (setActiveTab) {
+      setActiveTab('students');
+    } else {
+      alert(`Viewing students for program: ${program.name}\n\nThis would navigate to the Students page filtered by this program.`);
+    }
+  };
+
+  const handleQuickViewReports = (program: any) => {
+    setIsProgramDetailsOpen(false); // Close the details modal
+    // Navigate to Reports page (if available) or show alert
+    if (setActiveTab) {
+      // For now, navigate to dashboard since we don't have a dedicated reports page
+      setActiveTab('dashboard');
+    } else {
+      alert(`Viewing reports for program: ${program.name}\n\nThis would navigate to the Reports page filtered by this program.`);
+    }
+  };
+
+  const handleQuickManageWaitingList = (program: any) => {
+    setIsProgramDetailsOpen(false); // Close the details modal
+    // Navigate to Waiting List page
+    if (setActiveTab) {
+      setActiveTab('waitinglist');
+    } else {
+      alert(`Managing waiting list for program: ${program.name}\n\nThis would navigate to the Waiting List page filtered by this program.`);
+    }
+  };
+
+  // Handler for opening class students modal
+  const handleViewClassStudents = (classData: any) => {
+    setSelectedClassForStudents(classData);
+    setIsClassStudentsOpen(true);
+  };
+
+  // Helper function to get program name by ID
+  const getProgramName = (programId: number) => {
+    const program = programs.find(p => p.id === programId);
+    return program ? program.name : 'Unknown Program';
+  };
+
+  // Handler for when a student is clicked in the class students modal
+  const handleStudentClick = (student: any) => {
+    setIsClassStudentsOpen(false); // Close the class students modal
+    
+    // Prepare student data for the modal - pass raw Supabase data with program name added
+    const studentData = {
+      ...student, // Keep all original Supabase field names
+      programName: student.program_id ? getProgramName(student.program_id) : 'Not assigned'
+    };
+    
+    setSelectedStudent(studentData);
+    setIsStudentModalOpen(true);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
@@ -182,26 +254,29 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
           <h1 className="text-3xl font-bold text-gray-900">Program Management</h1>
           <p className="text-gray-600 mt-2">Manage educational programs and their classes</p>
         </div>
-                                   <div className="flex items-center space-x-4">
-        <button 
-              onClick={() => {
-                refreshClasses();
-                refreshTeachers();
-              }}
-              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200 flex items-center space-x-2"
-        >
-              <RefreshCw className="w-5 h-5" />
-          <span>Refresh</span>
-        </button>
         <button 
               onClick={() => setIsAddProgramOpen(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200 flex items-center space-x-2"
         >
               <Plus className="w-5 h-5" />
           <span>Add Program</span>
         </button>
-          </div>
       </div>
+
+      {/* Loading State */}
+      {classesData.loading && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">Loading data...</h3>
+              <p className="text-sm text-blue-700 mt-1">Please wait while we fetch the latest information.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error State */}
       {classesData.error && (
@@ -319,7 +394,7 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
 
                                                {/* Program Stats */}
                         <div className="px-6 pb-6">
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
                               <p className="text-sm font-medium text-gray-600">Classes</p>
                               <p className="text-lg font-semibold text-blue-600">
@@ -331,6 +406,12 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
                               <p className="text-lg font-semibold text-green-600">
                                 {getStudentCountByProgram(program.id)}
                               </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Teachers</p>
+                <p className="text-lg font-semibold text-purple-600">
+                  {getClassesByProgramLocal(program.id).filter(cls => cls.teacher_id).length}
+                </p>
               </div>
             </div>
 
@@ -356,24 +437,103 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
                 </div>
                 
                 {getClassesByProgramLocal(program.id).length > 0 ? (
-                  <div className="space-y-2">
-                    {getClassesByProgramLocal(program.id).map((cls) => (
-                      <div key={cls.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                  <div className="space-y-3">
+                    {getClassesByProgramLocal(program.id).map((cls) => {
+                      const teacher = teachers.find(t => t.id === cls.teacher_id);
+                      
+                      
+                      // Calculate current enrollment from student data
+                      const currentEnrollment = students.filter(s => s.class_id === cls.id).length;
+                      const enrollmentPercentage = cls.max_capacity > 0 ? (currentEnrollment / cls.max_capacity) * 100 : 0;
+                      
+                      return (
+                        <div 
+                          key={cls.id} 
+                          className="bg-gray-50 rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all duration-200"
+                          onClick={() => handleViewClassStudents(cls)}
+                        >
+                          <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <p className="font-medium text-gray-900">{cls.name}</p>
-                          <p className="text-sm text-gray-600">
-                            {cls.max_capacity} students • {cls.status} • {getTeacherNameLocal(cls.teacher_id)}
-                          </p>
+                              <div className="flex items-center space-x-3 mb-2">
+                                <h5 className="font-semibold text-gray-900">{cls.name}</h5>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  cls.status === 'active' ? 'bg-green-100 text-green-800' :
+                                  cls.status === 'inactive' ? 'bg-gray-100 text-gray-800' :
+                                  cls.status === 'full' ? 'bg-red-100 text-red-800' :
+                                  'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {cls.status}
+                                </span>
+                              </div>
+                              
+                              {/* Class Details */}
+                              <div className="grid grid-cols-2 gap-4 mb-3">
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase tracking-wide">Capacity</p>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {currentEnrollment} / {cls.max_capacity} students
+                                  </p>
+                                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div 
+                                      className={`h-1.5 rounded-full ${
+                                        enrollmentPercentage >= 90 ? 'bg-red-500' :
+                                        enrollmentPercentage >= 75 ? 'bg-yellow-500' :
+                                        'bg-green-500'
+                                      }`}
+                                      style={{ width: `${Math.min(enrollmentPercentage, 100)}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                                
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase tracking-wide">Teacher</p>
+                                  {teacher ? (
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                                        <span className="text-xs font-medium text-blue-600">
+                                          {teacher.first_name.charAt(0)}{teacher.last_name.charAt(0)}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-900">
+                                          {teacher.first_name} {teacher.last_name}
+                                        </p>
+                                        <p className="text-xs text-gray-500">{teacher.email}</p>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                                        <span className="text-xs font-medium text-gray-500">?</span>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-gray-500 italic">No teacher assigned</p>
+                                        <p className="text-xs text-gray-400">Click to assign</p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {cls.description && (
+                                <p className="text-xs text-gray-600 mt-2 line-clamp-2">{cls.description}</p>
+                              )}
                         </div>
+                            
                         <button
-                          onClick={() => handleEditClass(cls)}
-                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors duration-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClass(cls);
+                          }}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
                           title="Edit Class"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
                       </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                 </div>
                 ) : (
                   <div className="text-center py-4 text-gray-500 text-sm">
@@ -406,6 +566,10 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
           isOpen={isEditProgramOpen}
           onClose={() => setIsEditProgramOpen(false)}
           program={editingProgram}
+          onProgramUpdated={() => {
+            classesData.refreshPrograms();
+            classesData.refreshClasses();
+          }}
         />
       )}
 
@@ -414,6 +578,11 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
           isOpen={isProgramDetailsOpen}
           onClose={() => setIsProgramDetailsOpen(false)}
           program={selectedProgram}
+          classesData={classesData}
+          onEditProgram={handleQuickEditProgram}
+          onViewStudents={handleQuickViewStudents}
+          onViewReports={handleQuickViewReports}
+          onManageWaitingList={handleQuickManageWaitingList}
         />
       )}
 
@@ -437,6 +606,11 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
            teachers={teachers}
            updateClass={updateClass}
            deleteClass={deleteClass}
+           onClassUpdated={() => {
+             // Refresh classes and teachers data to show updated teacher assignments
+             refreshClasses();
+             refreshTeachers();
+           }}
          />
        )}
 
@@ -485,6 +659,33 @@ const ProgramManagement: React.FC<ProgramManagementProps> = ({ classesData }) =>
              </div>
            </div>
          </div>
+      )}
+
+      {/* Class Students Modal */}
+      {isClassStudentsOpen && selectedClassForStudents && (
+        <ClassStudentsModal
+          isOpen={isClassStudentsOpen}
+          onClose={() => {
+            setIsClassStudentsOpen(false);
+            setSelectedClassForStudents(null);
+          }}
+          classData={selectedClassForStudents}
+          students={students.filter(s => s.class_id === selectedClassForStudents.id)}
+          teacherName={teachers.find(t => t.id === selectedClassForStudents.teacher_id)?.first_name + ' ' + teachers.find(t => t.id === selectedClassForStudents.teacher_id)?.last_name}
+          onStudentClick={handleStudentClick}
+        />
+      )}
+
+      {/* Student Modal */}
+      {isStudentModalOpen && selectedStudent && (
+        <StudentModal
+          student={selectedStudent}
+          isOpen={isStudentModalOpen}
+          onClose={() => {
+            setIsStudentModalOpen(false);
+            setSelectedStudent(null);
+          }}
+        />
       )}
     </div>
   );

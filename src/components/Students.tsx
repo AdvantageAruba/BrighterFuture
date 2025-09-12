@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Eye, Edit, Trash2, Users, Calendar, BookOpen, GraduationCap } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Search, Filter, Users, Calendar, BookOpen, GraduationCap } from 'lucide-react';
 import AddStudent from './AddStudent';
 import EditStudent from './EditStudent';
 import StudentModal from './StudentModal';
 import StudentCard from './StudentCard';
 import { useStudents } from '../hooks/useStudents';
+import { useAuth } from '../contexts/AuthContext';
 
 const Students: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -13,7 +14,9 @@ const Students: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState('list'); // 'list', 'add', 'edit'
   const [editingStudent, setEditingStudent] = useState(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Get current user information for access control
+  const { userProfile } = useAuth();
   
   // Use real data from Supabase
   const { 
@@ -24,25 +27,19 @@ const Students: React.FC = () => {
     addStudent, 
     updateStudent, 
     deleteStudent,
-    getStudentsByProgram,
     getProgramName,
     refreshStudents
   } = useStudents();
 
-  // Debug logging
-  console.log('Students component render:', {
-    supabaseStudents: supabaseStudents?.length || 0,
-    supabasePrograms: supabasePrograms?.length || 0,
-    loading,
-    error,
-    refreshTrigger
-  });
+  // Remove debug logging to prevent console spam
+  // console.log('Students component render:', {
+  //   supabaseStudents: supabaseStudents?.length || 0,
+  //   supabasePrograms: supabasePrograms?.length || 0,
+  //   loading,
+  //   error,
+  //   refreshTrigger
+  // });
 
-  // Force re-render when refreshTrigger changes
-  useEffect(() => {
-    // This effect will run whenever refreshTrigger changes
-    // This ensures the component re-renders after student operations
-  }, [refreshTrigger]);
 
   // Transform students data for the UI
   const students = (supabaseStudents && Array.isArray(supabaseStudents) ? supabaseStudents : []).map(student => {
@@ -59,7 +56,7 @@ const Students: React.FC = () => {
         age: student.date_of_birth ? new Date().getFullYear() - new Date(student.date_of_birth).getFullYear() : 0,
         gender: student.gender || 'Not specified',
         program: student.program_id ? student.program_id.toString() : '0',
-        programName: getProgramName && student.program_id ? getProgramName(student.program_id) : 'Unknown Program',
+        programName: student.program_id ? getProgramName(student.program_id) : 'Unknown Program',
         lastSession: student.updated_at ? new Date(student.updated_at).toISOString().split('T')[0] : 'Unknown',
         status: student.status || 'unknown',
         avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`,
@@ -73,6 +70,16 @@ const Students: React.FC = () => {
       return null;
     }
   }).filter(Boolean); // Remove any null entries
+
+  // Apply parent access restrictions
+  const filteredStudentsForAccess = students.filter(student => {
+    // If user is a parent, only show their children
+    if (userProfile?.role === 'parent' && userProfile?.children_ids && student) {
+      return userProfile.children_ids.includes(student.id);
+    }
+    // For all other roles (admin, teacher, etc.), show all students
+    return true;
+  });
 
   // Transform programs data for the UI
   const programs = [
@@ -95,7 +102,7 @@ const Students: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedGender, setSelectedGender] = useState('all');
 
-  const filteredStudents = (students && Array.isArray(students) ? students : []).filter(student => {
+  const filteredStudents = (filteredStudentsForAccess && Array.isArray(filteredStudentsForAccess) ? filteredStudentsForAccess : []).filter(student => {
     try {
       if (!student || !student.name) return false;
       const matchesSearch = student.name.toLowerCase().includes((searchTerm || '').toLowerCase());
@@ -234,8 +241,6 @@ const Students: React.FC = () => {
       if (refreshStudents) {
         refreshStudents();
       }
-      // Also trigger a component re-render
-      setRefreshTrigger(prev => prev + 1);
     }} />;
   }
 
@@ -245,8 +250,6 @@ const Students: React.FC = () => {
       if (refreshStudents) {
         refreshStudents();
       }
-      // Also trigger a component re-render
-      setRefreshTrigger(prev => prev + 1);
     }} />;
   }
 
@@ -302,15 +305,22 @@ const Students: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Students</h1>
-            <p className="text-gray-600 mt-2">Manage student profiles and track their progress</p>
+            <p className="text-gray-600 mt-2">
+              {userProfile?.role === 'parent' 
+                ? 'View your children\'s profiles and progress' 
+                : 'Manage student profiles and track their progress'
+              }
+            </p>
           </div>
-          <button 
-            onClick={handleAddStudent}
-            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Student</span>
-          </button>
+          {userProfile?.role !== 'parent' && (
+            <button 
+              onClick={handleAddStudent}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Student</span>
+            </button>
+          )}
         </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -394,7 +404,7 @@ const Students: React.FC = () => {
                 return null;
               }
               
-              const programStudents = (students && Array.isArray(students) ? students : []).filter(s => s && s.program === program.id);
+              const programStudents = (filteredStudentsForAccess && Array.isArray(filteredStudentsForAccess) ? filteredStudentsForAccess : []).filter(s => s && s.program === program.id);
               const activeStudents = programStudents.filter(s => s && s.status === 'active');
               
               // Get appropriate icon for each program
@@ -425,7 +435,7 @@ const Students: React.FC = () => {
                 >
                   <div className="text-center">
                     <div className="flex justify-center mb-3">
-                      {getProgramIcon && program.id ? getProgramIcon(program.id) : <Users className="w-8 h-8 text-gray-600" />}
+                      {program.id ? getProgramIcon(program.id) : <Users className="w-8 h-8 text-gray-600" />}
                     </div>
                     <div className="text-2xl font-bold text-gray-900 mb-1">
                       {programStudents.length}
@@ -448,49 +458,22 @@ const Students: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-green-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-green-600">
-              {(students && Array.isArray(students) ? students : []).filter(s => s && s.status === 'active').length}
+              {(filteredStudentsForAccess && Array.isArray(filteredStudentsForAccess) ? filteredStudentsForAccess : []).filter(s => s && s.status === 'active').length}
             </div>
             <div className="text-sm text-green-700">Active Students</div>
           </div>
           <div className="bg-red-50 rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-red-600">
-              {(students && Array.isArray(students) ? students : []).filter(s => s && s.status === 'inactive').length}
+              {(filteredStudentsForAccess && Array.isArray(filteredStudentsForAccess) ? filteredStudentsForAccess : []).filter(s => s && s.status === 'inactive').length}
             </div>
             <div className="text-sm text-red-700">Inactive Students</div>
           </div>
           <div className="bg-blue-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">{(students && Array.isArray(students) ? students : []).length}</div>
+            <div className="text-2xl font-bold text-blue-600">{(filteredStudentsForAccess && Array.isArray(filteredStudentsForAccess) ? filteredStudentsForAccess : []).length}</div>
             <div className="text-sm text-blue-700">Total Students</div>
           </div>
         </div>
 
-        {/* Gender Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-blue-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              {(students && Array.isArray(students) ? students : []).filter(s => s && s.gender === 'male').length}
-            </div>
-            <div className="text-sm text-blue-700">Male Students</div>
-          </div>
-          <div className="bg-pink-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-pink-600">
-              {(students && Array.isArray(students) ? students : []).filter(s => s && s.gender === 'female').length}
-            </div>
-            <div className="text-sm text-pink-700">Female Students</div>
-          </div>
-          <div className="bg-purple-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">
-              {(students && Array.isArray(students) ? students : []).filter(s => s && s.gender === 'other').length}
-            </div>
-            <div className="text-sm text-purple-700">Other</div>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-gray-600">
-              {(students && Array.isArray(students) ? students : []).filter(s => s && s.gender === 'prefer-not-to-say').length}
-            </div>
-            <div className="text-sm text-gray-700">Not Specified</div>
-          </div>
-        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {(filteredStudents && Array.isArray(filteredStudents) ? filteredStudents : []).map((student) => {
@@ -507,9 +490,11 @@ const Students: React.FC = () => {
                 key={student.id}
                 student={student}
                 onView={() => handleViewStudent(student)}
-                onEdit={() => handleEditStudent(student)}
-                onDelete={handleDeleteStudent}
-                onStatusToggle={handleStatusToggle}
+                {...(userProfile?.role !== 'parent' && {
+                  onEdit: () => handleEditStudent(student),
+                  onDelete: handleDeleteStudent,
+                  onStatusToggle: handleStatusToggle
+                })}
               />
             );
           })}

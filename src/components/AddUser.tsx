@@ -1,7 +1,18 @@
-import React, { useState } from 'react';
-import { X, Save, User, Mail, Phone, Shield, Link, Copy, Check, Users } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Save, User, Mail, Phone, Shield, Link, Copy, Check, Users, Eye, EyeOff, Settings, Lock, Unlock } from 'lucide-react';
 import PictureUpload from './PictureUpload';
 import { useUsers } from '../hooks/useUsers';
+import { 
+  AVAILABLE_PERMISSIONS, 
+  AVAILABLE_TABS, 
+  getDefaultPermissions, 
+  getDefaultTabs, 
+  canCustomizePermissions,
+  getRoleConfig,
+  getPermissionsByCategory,
+  Permission,
+  TabVisibility
+} from '../lib/permissions';
 
 interface AddUserProps {
   isOpen: boolean;
@@ -18,18 +29,23 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
     role: '',
     department: '',
     sendInvite: false,
-    permissions: [] as string[]
+    permissions: [] as string[],
+    visibleTabs: [] as string[]
   });
 
   const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
   const [selectedProgram, setSelectedProgram] = useState<number | ''>('');
   const [selectedClass, setSelectedClass] = useState<string | ''>('');
+  const [selectedChildren, setSelectedChildren] = useState<number[]>([]);
 
   const [inviteLink, setInviteLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [showAdvancedPermissions, setShowAdvancedPermissions] = useState(false);
+  const [customPermissionsEnabled, setCustomPermissionsEnabled] = useState(false);
 
   // Use the users hook
-  const { addUser, uploadUserPicture, programs, classes, fetchClasses } = useUsers();
+  const { addUser, uploadUserPicture, programs, classes, students, fetchClasses } = useUsers();
 
   const roles = [
     { id: 'administrator', name: 'Administrator' },
@@ -48,18 +64,53 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
     { id: 'external', name: 'External' }
   ];
 
-  const permissions = [
-    { id: 'students', name: 'Student Management' },
-    { id: 'calendar', name: 'Calendar Access' },
-    { id: 'forms', name: 'Forms & Assessments' },
-    { id: 'notes', name: 'Daily Notes' },
-    { id: 'attendance', name: 'Attendance Tracking' },
-    { id: 'reports', name: 'Reports & Analytics' },
-    { id: 'settings', name: 'System Settings' },
-    { id: 'programs', name: 'Program Management' }
-  ];
+  // Remove the old permissions array since we're using the new permissions system
 
   if (!isOpen) return null;
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setFormData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        role: '',
+        department: '',
+        sendInvite: false,
+        permissions: [],
+        visibleTabs: []
+      });
+      setSelectedPicture(null);
+      setSelectedProgram('');
+      setSelectedClass('');
+      setSelectedChildren([]);
+      setInviteLink('');
+      setLinkCopied(false);
+      setEmailError('');
+      setShowAdvancedPermissions(false);
+      setCustomPermissionsEnabled(false);
+    }
+  }, [isOpen]);
+
+  // Update permissions and tabs when role changes
+  useEffect(() => {
+    if (formData.role) {
+      const defaultPermissions = getDefaultPermissions(formData.role);
+      const defaultTabs = getDefaultTabs(formData.role);
+      const canCustomize = canCustomizePermissions(formData.role);
+      
+      setFormData(prev => ({
+        ...prev,
+        permissions: defaultPermissions,
+        visibleTabs: defaultTabs
+      }));
+      
+      setCustomPermissionsEnabled(canCustomize);
+      setShowAdvancedPermissions(false);
+    }
+  }, [formData.role]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -69,6 +120,25 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
     }));
   };
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      email: value
+    }));
+    
+    if (value && !validateEmail(value)) {
+      setEmailError('Please enter a valid email address');
+    } else {
+      setEmailError('');
+    }
+  };
+
   const handlePermissionChange = (permissionId: string) => {
     setFormData(prev => ({
       ...prev,
@@ -76,6 +146,36 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
         ? prev.permissions.filter(p => p !== permissionId)
         : [...prev.permissions, permissionId]
     }));
+  };
+
+  const handleTabVisibilityChange = (tabId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      visibleTabs: prev.visibleTabs.includes(tabId)
+        ? prev.visibleTabs.filter(t => t !== tabId)
+        : [...prev.visibleTabs, tabId]
+    }));
+  };
+
+  const resetToDefaults = () => {
+    if (formData.role) {
+      const defaultPermissions = getDefaultPermissions(formData.role);
+      const defaultTabs = getDefaultTabs(formData.role);
+      
+      setFormData(prev => ({
+        ...prev,
+        permissions: defaultPermissions,
+        visibleTabs: defaultTabs
+      }));
+    }
+  };
+
+  const handleChildSelection = (childId: number) => {
+    setSelectedChildren(prev => 
+      prev.includes(childId)
+        ? prev.filter(id => id !== childId)
+        : [...prev, childId]
+    );
   };
 
   const generateInviteLink = () => {
@@ -94,6 +194,12 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate email before submission
+    if (!validateEmail(formData.email)) {
+      setEmailError('Please enter a valid email address');
+      return;
+    }
+    
     try {
       // Prepare user data for Supabase
       const userData = {
@@ -102,15 +208,17 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
         email: formData.email,
         phone: formData.phone || '',
         role: formData.role,
-        department: formData.department || '',
+        department: formData.role === 'parent' ? '' : (formData.department || ''), // No department for parents
         status: 'active',
         permissions: formData.permissions,
-        program_id: selectedProgram || undefined,
-        class_id: selectedClass || undefined
+        visible_tabs: formData.visibleTabs, // Add visible tabs to user data
+        program_id: formData.role === 'parent' ? undefined : (selectedProgram || undefined), // No program for parents
+        class_id: formData.role === 'parent' ? undefined : (selectedClass || undefined), // No class for parents
+        children_ids: formData.role === 'parent' ? selectedChildren : undefined // Only for parents
       };
 
-      // Save user to Supabase
-      const result = await addUser(userData);
+      // Save user to Supabase with invitation
+      const result = await addUser(userData, formData.sendInvite);
       
       if (result.success) {
         console.log('User added successfully:', result.data);
@@ -127,11 +235,21 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
         }
         
         const newInviteLink = generateInviteLink();
-        let successMessage = `User created successfully! ${formData.sendInvite ? 'Invite link generated.' : ''} ${selectedPicture ? 'Profile picture uploaded.' : ''}`;
+        let successMessage = `User created successfully! ${formData.sendInvite ? 'Invitation email sent with temporary password.' : ''} ${selectedPicture ? 'Profile picture uploaded.' : ''}`;
         
         // Add message about automatic teacher assignment if applicable
         if (formData.role === 'teacher' && selectedProgram && selectedClass) {
           successMessage += ' Teacher has been automatically assigned to the selected class.';
+        }
+        
+        // Add message about children assignment if applicable
+        if (formData.role === 'parent' && selectedChildren.length > 0) {
+          successMessage += ` Parent has been linked to ${selectedChildren.length} child(ren).`;
+        }
+        
+        // Add invitation details if invitation was sent
+        if (formData.sendInvite && result.data) {
+          successMessage += ` Temporary password: ${result.data.temporary_password}`;
         }
         
         alert(successMessage);
@@ -154,8 +272,8 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Add New User</h2>
             <p className="text-gray-600">Create a new user account and send invitation</p>
@@ -168,8 +286,9 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          <div className="space-y-6">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+            <div className="space-y-6 pb-8">
             {/* Personal Information */}
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
@@ -202,13 +321,19 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
                   <input
-                    type="text"
+                    type="email"
                     name="email"
                     value={formData.email}
-                    onChange={handleInputChange}
+                    onChange={handleEmailChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      emailError ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="user@example.com"
                   />
+                  {emailError && (
+                    <p className="mt-1 text-sm text-red-600">{emailError}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
@@ -265,7 +390,8 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
                     name="department"
                     value={formData.department}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={formData.role === 'parent'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100"
                   >
                     <option value="">Select department...</option>
                     {departments.map((dept) => (
@@ -274,6 +400,9 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
                       </option>
                     ))}
                   </select>
+                  {formData.role === 'parent' && (
+                    <p className="text-xs text-gray-500 mt-1">Department not applicable for parents</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -331,25 +460,197 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
               </div>
             )}
 
-            {/* Permissions */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Permissions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {permissions.map((permission) => (
-                  <div key={permission.id} className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      id={permission.id}
-                      checked={formData.permissions.includes(permission.id)}
-                      onChange={() => handlePermissionChange(permission.id)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label htmlFor={permission.id} className="text-sm text-gray-700">
-                      {permission.name}
-                    </label>
-                  </div>
-                ))}
+            {/* Children Selection for Parents */}
+            {formData.role === 'parent' && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                  <Users className="w-5 h-5" />
+                  <span>Children Selection</span>
+                </h3>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Select which children this parent/guardian is responsible for. They will only be able to view and edit information for the selected children.
+                  </p>
+                  {students.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No students found. Please add students first before creating parent accounts.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-4">
+                      {students.map((student) => (
+                        <div key={student.id} className="flex items-center space-x-3">
+                          <input
+                            type="checkbox"
+                            id={`child-${student.id}`}
+                            checked={selectedChildren.includes(student.id)}
+                            onChange={() => handleChildSelection(student.id)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <label htmlFor={`child-${student.id}`} className="text-sm text-gray-700 cursor-pointer">
+                            <div className="font-medium">{student.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {student.date_of_birth ? `Age: ${Math.floor((new Date().getTime() - new Date(student.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))} years` : 'Age not specified'}
+                            </div>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selectedChildren.length > 0 && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>Selected children:</strong> {selectedChildren.length} child(ren) selected
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
+
+            {/* Enhanced Permissions Section */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                  <Shield className="w-5 h-5" />
+                  <span>Permissions & Access Control</span>
+                </h3>
+                {customPermissionsEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedPermissions(!showAdvancedPermissions)}
+                    className="flex items-center space-x-2 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>{showAdvancedPermissions ? 'Hide Advanced' : 'Show Advanced'}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Role Information */}
+              {formData.role && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0">
+                      {customPermissionsEnabled ? (
+                        <Unlock className="w-5 h-5 text-blue-600" />
+                      ) : (
+                        <Lock className="w-5 h-5 text-blue-600" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-blue-900">
+                        {getRoleConfig(formData.role)?.roleName} Role
+                      </h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        {getRoleConfig(formData.role)?.description}
+                      </p>
+                      {!customPermissionsEnabled && (
+                        <p className="text-xs text-blue-600 mt-2 font-medium">
+                          ⚠️ This role has fixed permissions for security reasons
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Visibility Control */}
+              <div className="mb-6">
+                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center space-x-2">
+                  <Eye className="w-4 h-4" />
+                  <span>Navigation Tabs Visibility</span>
+                </h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  Choose which tabs will be visible in the user's navigation menu
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {AVAILABLE_TABS.map((tab) => (
+                    <div key={tab.id} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                      <input
+                        type="checkbox"
+                        id={`tab-${tab.id}`}
+                        checked={formData.visibleTabs.includes(tab.id)}
+                        onChange={() => handleTabVisibilityChange(tab.id)}
+                        disabled={!customPermissionsEnabled && !getDefaultTabs(formData.role).includes(tab.id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 disabled:opacity-50"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <label htmlFor={`tab-${tab.id}`} className="text-sm font-medium text-gray-700 cursor-pointer">
+                          {tab.name}
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">{tab.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Permissions Control */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-md font-medium text-gray-900 flex items-center space-x-2">
+                    <Shield className="w-4 h-4" />
+                    <span>System Permissions</span>
+                  </h4>
+                  {customPermissionsEnabled && (
+                    <button
+                      type="button"
+                      onClick={resetToDefaults}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Reset to Defaults
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Configure what actions and features the user can access
+                </p>
+
+                {/* Permission Categories */}
+                {['management', 'access', 'system', 'communication'].map((category) => {
+                  const categoryPermissions = getPermissionsByCategory(category);
+                  const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+                  
+                  return (
+                    <div key={category} className="mb-6">
+                      <h5 className="text-sm font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
+                        {categoryName} Permissions
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {categoryPermissions.map((permission) => (
+                          <div key={permission.id} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                            <input
+                              type="checkbox"
+                              id={`perm-${permission.id}`}
+                              checked={formData.permissions.includes(permission.id)}
+                              onChange={() => handlePermissionChange(permission.id)}
+                              disabled={!customPermissionsEnabled && !getDefaultPermissions(formData.role).includes(permission.id)}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 disabled:opacity-50"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <label htmlFor={`perm-${permission.id}`} className="text-sm font-medium text-gray-700 cursor-pointer">
+                                {permission.name}
+                              </label>
+                              <p className="text-xs text-gray-500 mt-1">{permission.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Advanced Permissions Toggle */}
+              {customPermissionsEnabled && showAdvancedPermissions && (
+                <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h4 className="font-medium text-yellow-900 mb-2">Advanced Permission Settings</h4>
+                  <p className="text-sm text-yellow-700">
+                    Custom permissions are enabled for this role. You can modify the default permissions 
+                    to create a tailored access profile for this user.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Invitation Settings */}
@@ -372,17 +673,29 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
                   </label>
                 </div>
 
-                {inviteLink && (
+                {formData.sendInvite && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="font-medium text-blue-900 mb-2">Invitation Details</h4>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• A temporary password will be generated</li>
+                      <li>• An invitation email will be sent to {formData.email || 'the user'}</li>
+                      <li>• The user must change their password on first login</li>
+                      <li>• Invitation link expires in 7 days</li>
+                    </ul>
+                  </div>
+                )}
+
+                {inviteLink && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium text-blue-900">Invitation Link Generated</h4>
-                        <p className="text-sm text-blue-700 mt-1 break-all">{inviteLink}</p>
+                        <h4 className="font-medium text-green-900">Invitation Link Generated</h4>
+                        <p className="text-sm text-green-700 mt-1 break-all">{inviteLink}</p>
                       </div>
                       <button
                         type="button"
                         onClick={copyInviteLink}
-                        className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                        className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
                       >
                         {linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                         <span>{linkCopied ? 'Copied!' : 'Copy'}</span>
@@ -392,9 +705,10 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
                 )}
               </div>
             </div>
+            </div>
           </div>
 
-          <div className="flex items-center justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
+          <div className="flex items-center justify-end space-x-4 p-6 border-t border-gray-200 bg-white flex-shrink-0">
             <button
               type="button"
               onClick={onClose}
