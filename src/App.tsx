@@ -11,7 +11,6 @@ import Forms from './components/Forms';
 import DailyNotes from './components/DailyNotes';
 import Calendar from './components/Calendar';
 import Announcements from './components/Announcements';
-import Messages from './components/Messages';
 import ProgramManagement from './components/ProgramManagement';
 import Settings from './components/Settings';
 import UserProfile from './components/UserProfile';
@@ -82,7 +81,6 @@ const AppContent: React.FC = () => {
       'forms': 'forms',
       'dailynotes': 'notes',
       'calendar': 'calendar',
-      'messages': 'messages',
       'announcements': 'announcements',
       'programs': 'programs',
       'settings': 'settings'
@@ -146,8 +144,6 @@ const AppContent: React.FC = () => {
         return <Calendar />;
       case 'announcements':
         return <Announcements />;
-      case 'messages':
-        return <Messages />;
       case 'programs':
         return <ProgramManagement classesData={classesData} setActiveTab={handleTabChange} />;
       case 'settings':

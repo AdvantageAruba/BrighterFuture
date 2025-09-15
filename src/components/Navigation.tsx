@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
-import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User, MessageSquare, Mail } from 'lucide-react';
+import { Home, Users, Calendar, Settings, BookOpen, LogOut, Clock, FileText, CreditCard, User, MessageSquare } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useMessages } from '../hooks/useMessages';
 
 interface NavigationProps {
   activeTab: string;
@@ -15,7 +14,6 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }) => {
   const { signOut, hasPermission, userProfile } = useAuth();
-  const { getUnreadCount } = useMessages();
 
   // Debug logging
   console.log('🔍 Navigation Debug:', {
@@ -46,11 +44,10 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
     { id: 'forms', label: 'Forms', icon: FileText, permission: 'forms' },
     { id: 'dailynotes', label: 'Daily Notes', icon: BookOpen, permission: 'notes' },
     { id: 'calendar', label: 'Calendar', icon: Calendar, permission: 'calendar' },
-    { id: 'messages', label: 'Messages', icon: Mail, permission: 'messages', badge: getUnreadCount() },
     { id: 'announcements', label: 'Announcements', icon: MessageSquare, permission: 'announcements' },
     { id: 'programs', label: 'Programs', icon: BookOpen, permission: 'programs' },
     { id: 'settings', label: 'Settings', icon: Settings, permission: 'settings' },
-  ], [getUnreadCount]);
+  ], []);
 
   // Filter navigation items based on user permissions and visible_tabs
   const visibleNavItems = navItems.filter(item => {
