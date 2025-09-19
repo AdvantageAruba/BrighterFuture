@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, User, Mail, Phone, Shield, Link, Copy, Check, Users, Eye, EyeOff, Settings, Lock, Unlock } from 'lucide-react';
 import PictureUpload from './PictureUpload';
+import GranularPermissionsManager from './GranularPermissionsManager';
 import { useUsers } from '../hooks/useUsers';
 import { 
   AVAILABLE_PERMISSIONS, 
   AVAILABLE_TABS, 
   getDefaultPermissions, 
+  getDefaultPermissionsSync,
   getDefaultTabs, 
+  getDefaultTabsSync,
   canCustomizePermissions,
   getRoleConfig,
   getPermissionsByCategory,
   Permission,
-  TabVisibility
+  TabVisibility,
+  unflattenGranularPermissions,
+  getDefaultGranularPermissions
 } from '../lib/permissions';
 
 interface AddUserProps {
@@ -37,6 +42,7 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
   const [selectedProgram, setSelectedProgram] = useState<number | ''>('');
   const [selectedClass, setSelectedClass] = useState<string | ''>('');
   const [selectedChildren, setSelectedChildren] = useState<number[]>([]);
+  const [granularPermissions, setGranularPermissions] = useState<Record<string, string[]>>({});
 
   const [inviteLink, setInviteLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
@@ -96,20 +102,26 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
 
   // Update permissions and tabs when role changes
   useEffect(() => {
-    if (formData.role) {
-      const defaultPermissions = getDefaultPermissions(formData.role);
-      const defaultTabs = getDefaultTabs(formData.role);
-      const canCustomize = canCustomizePermissions(formData.role);
-      
-      setFormData(prev => ({
-        ...prev,
-        permissions: defaultPermissions,
-        visibleTabs: defaultTabs
-      }));
-      
-      setCustomPermissionsEnabled(canCustomize);
-      setShowAdvancedPermissions(false);
-    }
+    const updateRoleDefaults = async () => {
+      if (formData.role) {
+        const defaultPermissions = await getDefaultPermissions(formData.role);
+        const defaultTabs = await getDefaultTabs(formData.role);
+        const canCustomize = canCustomizePermissions(formData.role);
+        const defaultGranularPermissions = getDefaultGranularPermissions(formData.role);
+        
+        setFormData(prev => ({
+          ...prev,
+          permissions: defaultPermissions,
+          visibleTabs: defaultTabs
+        }));
+        
+        setGranularPermissions(defaultGranularPermissions);
+        setCustomPermissionsEnabled(canCustomize);
+        setShowAdvancedPermissions(false);
+      }
+    };
+
+    updateRoleDefaults();
   }, [formData.role]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -139,15 +151,6 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
     }
   };
 
-  const handlePermissionChange = (permissionId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      permissions: prev.permissions.includes(permissionId)
-        ? prev.permissions.filter(p => p !== permissionId)
-        : [...prev.permissions, permissionId]
-    }));
-  };
-
   const handleTabVisibilityChange = (tabId: string) => {
     setFormData(prev => ({
       ...prev,
@@ -159,8 +162,8 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
 
   const resetToDefaults = () => {
     if (formData.role) {
-      const defaultPermissions = getDefaultPermissions(formData.role);
-      const defaultTabs = getDefaultTabs(formData.role);
+      const defaultPermissions = getDefaultPermissionsSync(formData.role);
+      const defaultTabs = getDefaultTabsSync(formData.role);
       
       setFormData(prev => ({
         ...prev,
@@ -211,6 +214,7 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
         department: formData.role === 'parent' ? '' : (formData.department || ''), // No department for parents
         status: 'active',
         permissions: formData.permissions,
+        granular_permissions: granularPermissions,
         visible_tabs: formData.visibleTabs, // Add visible tabs to user data
         program_id: formData.role === 'parent' ? undefined : (selectedProgram || undefined), // No program for parents
         class_id: formData.role === 'parent' ? undefined : (selectedClass || undefined), // No class for parents
@@ -571,7 +575,7 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
                         id={`tab-${tab.id}`}
                         checked={formData.visibleTabs.includes(tab.id)}
                         onChange={() => handleTabVisibilityChange(tab.id)}
-                        disabled={!customPermissionsEnabled && !getDefaultTabs(formData.role).includes(tab.id)}
+                        disabled={!customPermissionsEnabled && !getDefaultTabsSync(formData.role).includes(tab.id)}
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 disabled:opacity-50"
                       />
                       <div className="flex-1 min-w-0">
@@ -606,39 +610,20 @@ const AddUser: React.FC<AddUserProps> = ({ isOpen, onClose, onUserAdded }) => {
                   Configure what actions and features the user can access
                 </p>
 
-                {/* Permission Categories */}
-                {['management', 'access', 'system', 'communication'].map((category) => {
-                  const categoryPermissions = getPermissionsByCategory(category);
-                  const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-                  
-                  return (
-                    <div key={category} className="mb-6">
-                      <h5 className="text-sm font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
-                        {categoryName} Permissions
-                      </h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {categoryPermissions.map((permission) => (
-                          <div key={permission.id} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
-                            <input
-                              type="checkbox"
-                              id={`perm-${permission.id}`}
-                              checked={formData.permissions.includes(permission.id)}
-                              onChange={() => handlePermissionChange(permission.id)}
-                              disabled={!customPermissionsEnabled && !getDefaultPermissions(formData.role).includes(permission.id)}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 disabled:opacity-50"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <label htmlFor={`perm-${permission.id}`} className="text-sm font-medium text-gray-700 cursor-pointer">
-                                {permission.name}
-                              </label>
-                              <p className="text-xs text-gray-500 mt-1">{permission.description}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Granular Permissions */}
+                <GranularPermissionsManager
+                  permissions={formData.permissions}
+                  onPermissionsChange={(newPermissions) => {
+                    const granularPermissions = unflattenGranularPermissions(newPermissions);
+                    setFormData(prev => ({
+                      ...prev,
+                      permissions: newPermissions
+                    }));
+                    setGranularPermissions(granularPermissions);
+                  }}
+                  role={formData.role}
+                  disabled={!customPermissionsEnabled}
+                />
               </div>
 
               {/* Advanced Permissions Toggle */}

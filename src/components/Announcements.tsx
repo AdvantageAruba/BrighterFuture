@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Calendar, User, Bell } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, User, Bell, X } from 'lucide-react';
 import { useAnnouncements } from '../hooks/useAnnouncements';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Announcement {
   id: number;
   title: string;
   content: string;
   priority: 'low' | 'medium' | 'high';
-  target_audience: 'all' | 'students' | 'parents' | 'staff';
+  target_audience: 'all' | 'students' | 'parents' | 'staff'; // Keep for backward compatibility
+  target_audiences?: string[]; // New array field for multiple audiences
   created_at: string;
   author_id: string;
   author_name: string;
@@ -36,13 +38,23 @@ const AddAnnouncement: React.FC<AddAnnouncementProps> = ({
   addAnnouncement,
   updateAnnouncement
 }) => {
+  const { userProfile } = useAuth();
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     priority: 'medium' as 'low' | 'medium' | 'high',
-    target_audience: 'all' as 'all' | 'students' | 'parents' | 'staff',
+    target_audiences: ['all'] as string[],
     is_active: true
   });
+
+  // Available user roles for target audience
+  const availableRoles = [
+    { id: 'all', name: 'All Users' },
+    { id: 'administrator', name: 'Administrators' },
+    { id: 'teacher', name: 'Teachers' },
+    { id: 'parent', name: 'Parents' },
+    { id: 'student', name: 'Students' }
+  ];
 
   useEffect(() => {
     if (isEditMode && existingAnnouncement) {
@@ -50,7 +62,7 @@ const AddAnnouncement: React.FC<AddAnnouncementProps> = ({
         title: existingAnnouncement.title,
         content: existingAnnouncement.content,
         priority: existingAnnouncement.priority,
-        target_audience: existingAnnouncement.target_audience,
+        target_audiences: existingAnnouncement.target_audiences || [existingAnnouncement.target_audience || 'all'],
         is_active: existingAnnouncement.is_active
       });
     } else {
@@ -58,7 +70,7 @@ const AddAnnouncement: React.FC<AddAnnouncementProps> = ({
         title: '',
         content: '',
         priority: 'medium',
-        target_audience: 'all',
+        target_audiences: ['all'],
         is_active: true
       });
     }
@@ -72,6 +84,29 @@ const AddAnnouncement: React.FC<AddAnnouncementProps> = ({
     }));
   };
 
+  const handleTargetAudienceToggle = (roleId: string) => {
+    setFormData(prev => {
+      const currentAudiences = prev.target_audiences;
+      
+      if (roleId === 'all') {
+        // If "all" is selected, clear other selections
+        return { ...prev, target_audiences: ['all'] };
+      } else {
+        // Remove "all" if it exists and add/remove the specific role
+        const filteredAudiences = currentAudiences.filter(audience => audience !== 'all');
+        
+        if (filteredAudiences.includes(roleId)) {
+          // Remove the role
+          const newAudiences = filteredAudiences.filter(audience => audience !== roleId);
+          return { ...prev, target_audiences: newAudiences.length > 0 ? newAudiences : ['all'] };
+        } else {
+          // Add the role
+          return { ...prev, target_audiences: [...filteredAudiences, roleId] };
+        }
+      }
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -80,16 +115,20 @@ const AddAnnouncement: React.FC<AddAnnouncementProps> = ({
         title: formData.title,
         content: formData.content,
         priority: formData.priority,
-        target_audience: formData.target_audience,
-        is_active: formData.is_active,
-        author_name: 'System User' // This would come from auth context in a real app
+        target_audiences: formData.target_audiences,
+        is_active: formData.is_active
       };
 
       let result;
       if (isEditMode && existingAnnouncement) {
         result = await updateAnnouncement(existingAnnouncement.id, announcementData);
       } else {
-        result = await addAnnouncement(announcementData);
+        // Pass current user information for proper author tracking
+        const currentUser = {
+          id: userProfile?.id?.toString() || 'system-user',
+          name: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'System User'
+        };
+        result = await addAnnouncement(announcementData, currentUser);
       }
       
       if (result.success) {
@@ -187,22 +226,41 @@ const AddAnnouncement: React.FC<AddAnnouncementProps> = ({
               </div>
 
               <div>
-                <label htmlFor="target_audience" className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Target Audience *
                 </label>
-                <select
-                  id="target_audience"
-                  name="target_audience"
-                  value={formData.target_audience}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Users</option>
-                  <option value="students">Students Only</option>
-                  <option value="parents">Parents Only</option>
-                  <option value="staff">Staff Only</option>
-                </select>
+                <div className="space-y-2">
+                  {availableRoles.map((role) => (
+                    <label key={role.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.target_audiences.includes(role.id)}
+                        onChange={() => handleTargetAudienceToggle(role.id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">{role.name}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-2">
+                  <div className="flex flex-wrap gap-1">
+                    {formData.target_audiences.map((audience) => (
+                      <span
+                        key={audience}
+                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                      >
+                        {availableRoles.find(r => r.id === audience)?.name || audience}
+                        <button
+                          type="button"
+                          onClick={() => handleTargetAudienceToggle(audience)}
+                          className="ml-1 text-blue-600 hover:text-blue-800"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -246,12 +304,20 @@ const AddAnnouncement: React.FC<AddAnnouncementProps> = ({
 };
 
 const Announcements: React.FC = () => {
-  const { announcements, loading, addAnnouncement, updateAnnouncement, deleteAnnouncement } = useAnnouncements();
+  const { userProfile, hasPermission } = useAuth();
+  const { announcements, loading, isInitialized, addAnnouncement, updateAnnouncement, deleteAnnouncement, fetchAnnouncements } = useAnnouncements();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [announcementToEdit, setAnnouncementToEdit] = useState<Announcement | null>(null);
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+
+  // Fetch announcements with role-based filtering
+  useEffect(() => {
+    if (userProfile?.role) {
+      fetchAnnouncements(userProfile.role);
+    }
+  }, [userProfile?.role, fetchAnnouncements]);
 
   const handleEditAnnouncement = (announcement: Announcement) => {
     setAnnouncementToEdit(announcement);
@@ -279,9 +345,10 @@ const Announcements: React.FC = () => {
   const getTargetAudienceColor = (audience: string) => {
     switch (audience) {
       case 'all': return 'text-blue-600 bg-blue-100';
-      case 'students': return 'text-purple-600 bg-purple-100';
-      case 'parents': return 'text-orange-600 bg-orange-100';
-      case 'staff': return 'text-indigo-600 bg-indigo-100';
+      case 'administrator': return 'text-red-600 bg-red-100';
+      case 'teacher': return 'text-green-600 bg-green-100';
+      case 'parent': return 'text-purple-600 bg-purple-100';
+      case 'student': return 'text-orange-600 bg-orange-100';
       default: return 'text-gray-600 bg-gray-100';
     }
   };
@@ -314,13 +381,15 @@ const Announcements: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Announcements</h1>
           <p className="text-gray-600">Manage and share important information with your community</p>
         </div>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors flex items-center space-x-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Announcement</span>
-        </button>
+        {hasPermission('announcements.create') && (
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors flex items-center space-x-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Announcement</span>
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -363,7 +432,7 @@ const Announcements: React.FC = () => {
 
       {/* Announcements List */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {loading ? (
+        {loading || !isInitialized ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="text-gray-600 mt-2">Loading announcements...</p>
@@ -379,9 +448,16 @@ const Announcements: React.FC = () => {
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(announcement.priority)}`}>
                         {announcement.priority.charAt(0).toUpperCase() + announcement.priority.slice(1)} Priority
                       </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTargetAudienceColor(announcement.target_audience)}`}>
-                        {announcement.target_audience.charAt(0).toUpperCase() + announcement.target_audience.slice(1)}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {(announcement.target_audiences || [announcement.target_audience || 'all']).map((audience, index) => (
+                          <span
+                            key={index}
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTargetAudienceColor(audience)}`}
+                          >
+                            {audience.charAt(0).toUpperCase() + audience.slice(1)}
+                          </span>
+                        ))}
+                      </div>
                       {!announcement.is_active && (
                         <span className="px-2 py-1 rounded-full text-xs font-medium text-gray-600 bg-gray-100">
                           Inactive
@@ -415,20 +491,24 @@ const Announcements: React.FC = () => {
                   </div>
                   
                   <div className="flex items-center space-x-2 ml-4">
-                    <button
-                      onClick={() => handleEditAnnouncement(announcement)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Edit announcement"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAnnouncement(announcement.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete announcement"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {hasPermission('announcements.edit') && (
+                      <button
+                        onClick={() => handleEditAnnouncement(announcement)}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit announcement"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    )}
+                    {hasPermission('announcements.delete') && (
+                      <button
+                        onClick={() => handleDeleteAnnouncement(announcement.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete announcement"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -443,7 +523,7 @@ const Announcements: React.FC = () => {
             <p className="text-gray-400 text-sm mt-1">
               {filter === 'all' ? 'Create your first announcement to get started' : 'No announcements match your current filters'}
             </p>
-            {filter === 'all' && (
+            {filter === 'all' && hasPermission('announcements.create') && (
               <button
                 onClick={() => setIsAddModalOpen(true)}
                 className="mt-4 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors flex items-center space-x-2 mx-auto"

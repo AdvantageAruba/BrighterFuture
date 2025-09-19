@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, User, Mail, Phone, Shield, Users, Eye, Settings, Lock, Unlock } from 'lucide-react';
 import PictureUpload from './PictureUpload';
+import GranularPermissionsManager from './GranularPermissionsManager';
 import { useUsers } from '../hooks/useUsers';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,10 +9,16 @@ import {
   AVAILABLE_PERMISSIONS, 
   AVAILABLE_TABS, 
   getDefaultPermissions, 
+  getDefaultPermissionsSync,
   getDefaultTabs, 
+  getDefaultTabsSync,
   canCustomizePermissions,
   getRoleConfig,
-  getPermissionsByCategory
+  getPermissionsByCategory,
+  GRANULAR_PERMISSIONS,
+  getDefaultGranularPermissions,
+  flattenGranularPermissions,
+  unflattenGranularPermissions
 } from '../lib/permissions';
 
 interface EditUserProps {
@@ -39,17 +46,38 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
   const [selectedPicture, setSelectedPicture] = useState<File | null>(null);
   const [selectedProgram, setSelectedProgram] = useState<number | ''>(user.program_id || '');
   const [selectedClass, setSelectedClass] = useState<string | ''>(user.class_id || '');
+  const [selectedChildren, setSelectedChildren] = useState<number[]>(user.children_ids || []);
   const [availableClasses, setAvailableClasses] = useState<any[]>([]);
   const [showAdvancedPermissions, setShowAdvancedPermissions] = useState(false);
   const [customPermissionsEnabled, setCustomPermissionsEnabled] = useState(false);
+  const [granularPermissions, setGranularPermissions] = useState<Record<string, string[]>>(
+    user.granular_permissions || unflattenGranularPermissions(user.permissions || [])
+  );
 
   // Permission checking logic
   const isEditingOwnProfile = currentUserProfile?.email === user.email;
-  const canEditRole = hasPermission('user_management') && !isEditingOwnProfile;
-  const canEditPermissions = hasPermission('user_management') && !isEditingOwnProfile;
+  const canEditRole = (hasPermission('user_management') || hasPermission('users')) && !isEditingOwnProfile;
+  const canEditPermissions = (hasPermission('user_management') || hasPermission('users')) && !isEditingOwnProfile;
+
+  // Debug logging
+  console.log('🔍 EditUser Debug:', {
+    currentUserEmail: currentUserProfile?.email,
+    editingUserEmail: user.email,
+    isEditingOwnProfile,
+    hasUserManagementPermission: hasPermission('user_management'),
+    hasUsersPermission: hasPermission('users'),
+    hasAllPermission: hasPermission('all'),
+    userPermissions: currentUserProfile?.permissions,
+    canEditRole,
+    canEditPermissions,
+    customPermissionsEnabled,
+    formDataRole: formData.role,
+    userGranularPermissions: user.granular_permissions,
+    currentGranularPermissions: granularPermissions
+  });
 
   // Use the users hook
-  const { updateUser, uploadUserPicture, programs, classes, fetchClasses } = useUsers();
+  const { updateUser, uploadUserPicture, programs, classes, students, fetchClasses } = useUsers();
 
   // Local function to fetch classes for a specific program
   const fetchClassesForProgram = async (programId: number) => {
@@ -72,26 +100,75 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
   useEffect(() => {
     console.log('EditUser - Initial user data:', user);
     console.log('EditUser - Initial program_id:', user.program_id, 'Initial class_id:', user.class_id);
+    console.log('EditUser - Initial granular_permissions:', user.granular_permissions);
     
     // Update selected program and class when user data changes
     setSelectedProgram(user.program_id || '');
     setSelectedClass(user.class_id || '');
+    
+    // Update granular permissions when user data changes
+    setGranularPermissions(user.granular_permissions || unflattenGranularPermissions(user.permissions || []));
     
     if (user.program_id) {
       fetchClassesForProgram(user.program_id);
     } else {
       setAvailableClasses([]);
     }
-  }, [user.program_id, user.class_id]);
+  }, [user.program_id, user.class_id, user.granular_permissions, user.permissions]);
 
   // Update permissions and tabs when role changes
   useEffect(() => {
-    if (formData.role) {
-      const canCustomize = canCustomizePermissions(formData.role);
-      setCustomPermissionsEnabled(canCustomize);
-      setShowAdvancedPermissions(false);
+    const updateRoleDefaults = async () => {
+      if (formData.role) {
+        const canCustomize = canCustomizePermissions(formData.role);
+        // Enable custom permissions if user can edit permissions (admin) OR if role allows customization
+        setCustomPermissionsEnabled(canEditPermissions || canCustomize);
+        setShowAdvancedPermissions(false);
+        
+        // Only auto-apply default permissions if:
+        // 1. Custom permissions are not enabled AND
+        // 2. The user doesn't already have granular permissions (to avoid overriding saved data)
+        const hasExistingGranularPermissions = user.granular_permissions && Object.keys(user.granular_permissions).length > 0;
+        
+        if (!customPermissionsEnabled && !hasExistingGranularPermissions) {
+          const defaultPermissions = await getDefaultPermissions(formData.role);
+          const defaultTabs = await getDefaultTabs(formData.role);
+          const defaultGranularPermissions = getDefaultGranularPermissions(formData.role);
+          
+          console.log('🔄 Auto-applying default permissions for role:', formData.role, {
+            defaultPermissions,
+            defaultTabs,
+            defaultGranularPermissions,
+            hasExistingGranularPermissions
+          });
+          
+          setFormData(prev => ({
+            ...prev,
+            permissions: defaultPermissions,
+            visibleTabs: defaultTabs
+          }));
+          
+          setGranularPermissions(defaultGranularPermissions);
+        } else {
+          console.log('🔄 Skipping auto-apply - has existing granular permissions:', hasExistingGranularPermissions);
+        }
+      }
+    };
+
+    updateRoleDefaults();
+  }, [formData.role, canEditPermissions, customPermissionsEnabled, user.granular_permissions]);
+
+  // Initialize custom permissions for administrators on component mount
+  useEffect(() => {
+    console.log('🔧 CustomPermissions useEffect:', {
+      canEditPermissions,
+      customPermissionsEnabled,
+      willSetToTrue: canEditPermissions
+    });
+    if (canEditPermissions) {
+      setCustomPermissionsEnabled(true);
     }
-  }, [formData.role]);
+  }, [canEditPermissions]);
 
   // Get the current picture URL from the user data
   const currentPictureUrl = user.picture_url || user.avatar;
@@ -123,6 +200,60 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
 
   if (!isOpen) return null;
 
+  const handleChildSelection = (childId: number) => {
+    setSelectedChildren(prev => {
+      const newSelection = prev.includes(childId) 
+        ? prev.filter(id => id !== childId)
+        : [...prev, childId];
+      
+      // Auto-assign program and class based on selected children
+      if (newSelection.length > 0) {
+        const selectedStudents = students.filter(student => newSelection.includes(student.id));
+        
+        // Find the most common program among selected children
+        const programCounts = selectedStudents.reduce((acc, student) => {
+          if (student.program_id) {
+            acc[student.program_id] = (acc[student.program_id] || 0) + 1;
+          }
+          return acc;
+        }, {} as Record<number, number>);
+        
+        const mostCommonProgram = Object.entries(programCounts)
+          .sort(([,a], [,b]) => b - a)[0]?.[0];
+        
+        if (mostCommonProgram) {
+          setSelectedProgram(parseInt(mostCommonProgram));
+          
+          // Find the most common class within that program
+          const studentsInProgram = selectedStudents.filter(s => s.program_id === parseInt(mostCommonProgram));
+          const classCounts = studentsInProgram.reduce((acc, student) => {
+            if (student.class_id) {
+              acc[student.class_id] = (acc[student.class_id] || 0) + 1;
+            }
+            return acc;
+          }, {} as Record<number, number>);
+          
+          const mostCommonClass = Object.entries(classCounts)
+            .sort(([,a], [,b]) => b - a)[0]?.[0];
+          
+          if (mostCommonClass) {
+            setSelectedClass(mostCommonClass.toString());
+          }
+          
+          // Fetch classes for the selected program
+          fetchClassesForProgram(parseInt(mostCommonProgram));
+        }
+      } else {
+        // If no children selected, clear program and class
+        setSelectedProgram('');
+        setSelectedClass('');
+        setAvailableClasses([]);
+      }
+      
+      return newSelection;
+    });
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -138,6 +269,17 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
         ? prev.permissions.filter((p: string) => p !== permissionId)
         : [...prev.permissions, permissionId]
     }));
+  };
+
+  const handleGranularPermissionsChange = (newPermissions: string[]) => {
+    const granularPermissions = unflattenGranularPermissions(newPermissions);
+    
+    setFormData(prev => ({
+      ...prev,
+      permissions: newPermissions
+    }));
+    
+    setGranularPermissions(granularPermissions);
   };
 
   const handleTabVisibilityChange = (tabId: string) => {
@@ -176,9 +318,11 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
         department: formData.department || '',
         status: formData.status,
         permissions: formData.permissions,
+        granular_permissions: granularPermissions,
         visible_tabs: formData.visibleTabs,
         program_id: selectedProgram || undefined,
-        class_id: selectedClass || undefined
+        class_id: selectedClass || undefined,
+        children_ids: formData.role === 'parent' ? selectedChildren : undefined // Only for parents
       };
 
       console.log('EditUser - Updating user with data:', updateData);
@@ -190,6 +334,12 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
       
       if (result.success) {
         console.log('User updated successfully:', result.data);
+        
+        // Check if there was a warning about granular permissions
+        if (result.warning) {
+          console.warn('⚠️ Warning:', result.warning);
+          alert('User updated successfully, but granular permissions could not be saved. Please contact your administrator to run the database migration.');
+        }
         
         // Upload picture if one was selected
         if (selectedPicture) {
@@ -310,9 +460,9 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
                 <Shield className="w-5 h-5" />
-                <span>Role & Department</span>
+                <span>{formData.role === 'parent' ? 'Role' : 'Role & Department'}</span>
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className={`grid grid-cols-1 gap-4 ${formData.role === 'parent' ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Role *
@@ -328,9 +478,7 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
                     onChange={handleInputChange}
                     required
                     disabled={!canEditRole}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      !canEditRole ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''
-                    }`}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100"
                   >
                     {roles.map((role) => (
                       <option key={role.id} value={role.id}>
@@ -347,22 +495,24 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
                     </p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                  <select
-                    name="department"
-                    value={formData.department}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select department...</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {formData.role !== 'parent' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                    <select
+                      name="department"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select department...</option>
+                      {departments.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                   <select
@@ -380,6 +530,94 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
                 </div>
               </div>
             </div>
+
+            {/* Children Selection for Parents */}
+            {formData.role === 'parent' && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                  <Users className="w-5 h-5" />
+                  <span>Children Assignment</span>
+                </h3>
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Select which children this parent/guardian is responsible for. They will only be able to view and edit information for the selected children.
+                  </p>
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>💡 Auto-assignment:</strong> When you select children, the parent's program and class will be automatically set to match the children's enrollment.
+                    </p>
+                  </div>
+                  {students.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No students found. Please add students first before assigning them to parents.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-4">
+                      {students.map((student) => (
+                        <div key={student.id} className="flex items-center space-x-3">
+                          <input
+                            type="checkbox"
+                            id={`child-${student.id}`}
+                            checked={selectedChildren.includes(student.id)}
+                            onChange={() => handleChildSelection(student.id)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <label htmlFor={`child-${student.id}`} className="text-sm text-gray-700 cursor-pointer">
+                            <div className="font-medium">{student.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {student.date_of_birth ? `Age: ${Math.floor((new Date().getTime() - new Date(student.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))} years` : 'Age not specified'}
+                            </div>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selectedChildren.length > 0 && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>Selected children:</strong> {selectedChildren.length} child(ren) selected
+                      </p>
+                      {(() => {
+                        const selectedStudents = students.filter(student => selectedChildren.includes(student.id));
+                        const programCounts = selectedStudents.reduce((acc, student) => {
+                          if (student.program_id) {
+                            acc[student.program_id] = (acc[student.program_id] || 0) + 1;
+                          }
+                          return acc;
+                        }, {} as Record<number, number>);
+                        
+                        const mostCommonProgram = Object.entries(programCounts)
+                          .sort(([,a], [,b]) => b - a)[0]?.[0];
+                        
+                        if (mostCommonProgram) {
+                          const program = programs.find(p => p.id === parseInt(mostCommonProgram));
+                          const studentsInProgram = selectedStudents.filter(s => s.program_id === parseInt(mostCommonProgram));
+                          const classCounts = studentsInProgram.reduce((acc, student) => {
+                            if (student.class_id) {
+                              acc[student.class_id] = (acc[student.class_id] || 0) + 1;
+                            }
+                            return acc;
+                          }, {} as Record<number, number>);
+                          
+                          const mostCommonClass = Object.entries(classCounts)
+                            .sort(([,a], [,b]) => b - a)[0]?.[0];
+                          
+                          const classObj = classes.find(c => c.id === parseInt(mostCommonClass || '0'));
+                          
+                          return (
+                            <div className="mt-2 text-xs text-blue-700">
+                              <strong>Auto-assigned:</strong> {program?.name || 'Unknown Program'}
+                              {classObj && ` → ${classObj.name}`}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Program and Class Assignment - Available for all roles */}
             <div>
@@ -521,7 +759,7 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
                         id={`tab-${tab.id}`}
                         checked={formData.visibleTabs.includes(tab.id)}
                         onChange={() => handleTabVisibilityChange(tab.id)}
-                        disabled={!canEditPermissions || (!customPermissionsEnabled && !getDefaultTabs(formData.role).includes(tab.id))}
+                        disabled={!canEditPermissions || (!customPermissionsEnabled && !getDefaultTabsSync(formData.role).includes(tab.id))}
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 disabled:opacity-50"
                       />
                       <div className="flex-1 min-w-0">
@@ -556,39 +794,14 @@ const EditUser: React.FC<EditUserProps> = ({ user, isOpen, onClose, onUserUpdate
                   Configure what actions and features the user can access
                 </p>
 
-                {/* Permission Categories */}
-                {['management', 'access', 'system', 'communication'].map((category) => {
-                  const categoryPermissions = getPermissionsByCategory(category);
-                  const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-                  
-                  return (
-                    <div key={category} className="mb-6">
-                      <h5 className="text-sm font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
-                        {categoryName} Permissions
-                      </h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {categoryPermissions.map((permission) => (
-                          <div key={permission.id} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
-                            <input
-                              type="checkbox"
-                              id={`perm-${permission.id}`}
-                              checked={formData.permissions.includes(permission.id)}
-                              onChange={() => handlePermissionChange(permission.id)}
-                              disabled={!canEditPermissions || (!customPermissionsEnabled && !getDefaultPermissions(formData.role).includes(permission.id))}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 disabled:opacity-50"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <label htmlFor={`perm-${permission.id}`} className="text-sm font-medium text-gray-700 cursor-pointer">
-                                {permission.name}
-                              </label>
-                              <p className="text-xs text-gray-500 mt-1">{permission.description}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Granular Permissions */}
+                <GranularPermissionsManager
+                  permissions={formData.permissions}
+                  granularPermissions={granularPermissions}
+                  onPermissionsChange={handleGranularPermissionsChange}
+                  role={formData.role}
+                  disabled={!canEditPermissions}
+                />
               </div>
 
               {/* Advanced Permissions Toggle */}

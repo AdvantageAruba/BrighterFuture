@@ -1,7 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, Check, X, Save, Edit, Lock, Eye, Settings, Calendar, BookOpen, FileText, BarChart3, UserCheck } from 'lucide-react';
+import { Shield, Users, Check, X, Save, Edit, Lock, Eye, Settings, Calendar, BookOpen, FileText, BarChart3, UserCheck, MessageSquare, Megaphone, Clock } from 'lucide-react';
 import { useUsers } from '../hooks/useUsers';
 import { supabase } from '../lib/supabase';
+import GranularPermissionsManager from './GranularPermissionsManager';
+import { 
+  AVAILABLE_PERMISSIONS, 
+  AVAILABLE_TABS, 
+  ROLE_PERMISSIONS, 
+  getDefaultPermissions, 
+  getDefaultTabs,
+  getRoleConfig,
+  GRANULAR_PERMISSIONS,
+  getDefaultGranularPermissions,
+  flattenGranularPermissions,
+  unflattenGranularPermissions
+} from '../lib/permissions';
 
 interface Permission {
   id: string;
@@ -16,7 +29,8 @@ interface Role {
   name: string;
   description: string;
   color: string;
-  permissions: string[];
+  permissions: string[]; // Flat permissions for backward compatibility
+  granularPermissions: Record<string, string[]>; // Granular permissions
   userCount: number;
   isSystem: boolean;
 }
@@ -30,94 +44,60 @@ const PermissionsManagement: React.FC = () => {
 
   const { users } = useUsers();
 
-  // Define all available permissions
-  const allPermissions: Permission[] = [
-    // System Permissions
-    { id: 'system_admin', name: 'System Administration', description: 'Full system access and configuration', category: 'System', icon: <Settings className="w-4 h-4" /> },
-    { id: 'user_management', name: 'User Management', description: 'Create, edit, and manage user accounts', category: 'System', icon: <Users className="w-4 h-4" /> },
-    
-    // Core Permissions
-    { id: 'students', name: 'Student Management', description: 'View, add, edit, and delete student records', category: 'Core', icon: <UserCheck className="w-4 h-4" /> },
-    { id: 'calendar', name: 'Calendar Access', description: 'View and manage calendar events and schedules', category: 'Core', icon: <Calendar className="w-4 h-4" /> },
-    { id: 'attendance', name: 'Attendance Tracking', description: 'Mark and view student attendance', category: 'Core', icon: <Check className="w-4 h-4" /> },
-    { id: 'notes', name: 'Daily Notes', description: 'Create and view daily notes for students', category: 'Core', icon: <FileText className="w-4 h-4" /> },
-    
-    // Program Management
-    { id: 'programs', name: 'Program Management', description: 'Create and manage educational programs', category: 'Programs', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'classes', name: 'Class Management', description: 'Manage classes and student assignments', category: 'Programs', icon: <Users className="w-4 h-4" /> },
-    
-    // Assessment & Forms
-    { id: 'forms', name: 'Forms & Assessments', description: 'Create and manage assessment forms', category: 'Assessment', icon: <FileText className="w-4 h-4" /> },
-    { id: 'therapy', name: 'Therapy Services', description: 'Access to therapy-specific features', category: 'Assessment', icon: <Shield className="w-4 h-4" /> },
-    
-    // Reporting & Analytics
-    { id: 'reports', name: 'Reports & Analytics', description: 'Generate and view system reports', category: 'Reports', icon: <BarChart3 className="w-4 h-4" /> },
-    
-    // Parent-Specific Permissions
-    { id: 'view_child', name: 'View Own Child', description: 'View information for assigned children only', category: 'Parent', icon: <Eye className="w-4 h-4" /> },
-    { id: 'edit_child', name: 'Edit Own Child', description: 'Edit information for assigned children only', category: 'Parent', icon: <Edit className="w-4 h-4" /> },
-    
-    // Communication
-    { id: 'messages', name: 'Messaging System', description: 'Send and receive messages', category: 'Communication', icon: <FileText className="w-4 h-4" /> },
-  ];
+  // Define helper functions first
+  const getPermissionIcon = (permissionId: string) => {
+    const iconMap: { [key: string]: React.ReactNode } = {
+      'students': <UserCheck className="w-4 h-4" />,
+      'programs': <BookOpen className="w-4 h-4" />,
+      'classes': <Users className="w-4 h-4" />,
+      'users': <Users className="w-4 h-4" />,
+      'attendance': <Check className="w-4 h-4" />,
+      'calendar': <Calendar className="w-4 h-4" />,
+      'forms': <FileText className="w-4 h-4" />,
+      'notes': <FileText className="w-4 h-4" />,
+      'reports': <BarChart3 className="w-4 h-4" />,
+      'waiting_list': <Clock className="w-4 h-4" />,
+      'settings': <Settings className="w-4 h-4" />,
+      'backup': <Shield className="w-4 h-4" />,
+      'logs': <FileText className="w-4 h-4" />,
+      'announcements': <Megaphone className="w-4 h-4" />,
+      'notifications': <MessageSquare className="w-4 h-4" />
+    };
+    return iconMap[permissionId] || <Shield className="w-4 h-4" />;
+  };
 
-  // Define default roles with their permissions
-  const defaultRoles: Role[] = [
-    {
-      id: 'administrator',
-      name: 'Administrator',
-      description: 'Full system access with all permissions',
-      color: 'red',
-      permissions: ['system_admin', 'user_management', 'students', 'calendar', 'attendance', 'notes', 'programs', 'classes', 'forms', 'therapy', 'reports'],
-      userCount: 0,
-      isSystem: true
-    },
-    {
-      id: 'teacher',
-      name: 'Teacher',
-      description: 'Access to assigned students and classroom management',
-      color: 'blue',
-      permissions: ['students', 'calendar', 'attendance', 'notes', 'classes', 'forms'],
-      userCount: 0,
-      isSystem: true
-    },
-    {
-      id: 'therapist',
-      name: 'Therapist',
-      description: 'Access to therapy students and assessment tools',
-      color: 'green',
-      permissions: ['students', 'calendar', 'notes', 'forms', 'therapy'],
-      userCount: 0,
-      isSystem: true
-    },
-    {
-      id: 'coordinator',
-      name: 'Program Coordinator',
-      description: 'Manage programs and oversee multiple classes',
-      color: 'orange',
-      permissions: ['students', 'calendar', 'attendance', 'notes', 'programs', 'classes', 'forms', 'reports'],
-      userCount: 0,
-      isSystem: true
-    },
-    {
-      id: 'parent',
-      name: 'Parent/Guardian',
-      description: 'Limited access to own children\'s information',
-      color: 'purple',
-      permissions: ['view_child', 'edit_child', 'messages'],
-      userCount: 0,
-      isSystem: true
-    },
-    {
-      id: 'staff',
-      name: 'Support Staff',
-      description: 'Basic access for administrative support',
-      color: 'gray',
-      permissions: ['calendar', 'notes'],
-      userCount: 0,
-      isSystem: true
-    }
-  ];
+  const getRoleColor = (roleId: string) => {
+    const colors = {
+      administrator: 'bg-red-100 text-red-800 border-red-200',
+      teacher: 'bg-blue-100 text-blue-800 border-blue-200',
+      therapist: 'bg-green-100 text-green-800 border-green-200',
+      coordinator: 'bg-orange-100 text-orange-800 border-orange-200',
+      parent: 'bg-purple-100 text-purple-800 border-purple-200',
+      staff: 'bg-gray-100 text-gray-800 border-gray-200'
+    };
+    return colors[roleId as keyof typeof colors] || colors.staff;
+  };
+
+  // Define all available permissions using the centralized system
+  const allPermissions: Permission[] = AVAILABLE_PERMISSIONS.map(perm => ({
+    id: perm.id,
+    name: perm.name,
+    description: perm.description,
+    category: perm.category,
+    icon: getPermissionIcon(perm.id)
+  }));
+
+  // Define default roles using the centralized system
+  const defaultRoles: Role[] = ROLE_PERMISSIONS.map(roleConfig => ({
+    id: roleConfig.role,
+    name: roleConfig.roleName,
+    description: roleConfig.description,
+    color: getRoleColor(roleConfig.role),
+    permissions: roleConfig.defaultPermissions,
+    granularPermissions: getDefaultGranularPermissions(roleConfig.role),
+    userCount: 0,
+    isSystem: true
+  }));
 
   // Load roles and user counts
   useEffect(() => {
@@ -142,23 +122,6 @@ const PermissionsManagement: React.FC = () => {
     loadRoles();
   }, [users]);
 
-  const getRoleColor = (color: string) => {
-    const colors = {
-      red: 'bg-red-100 text-red-800 border-red-200',
-      blue: 'bg-blue-100 text-blue-800 border-blue-200',
-      green: 'bg-green-100 text-green-800 border-green-200',
-      purple: 'bg-purple-100 text-purple-800 border-purple-200',
-      orange: 'bg-orange-100 text-orange-800 border-orange-200',
-      gray: 'bg-gray-100 text-gray-800 border-gray-200'
-    };
-    return colors[color as keyof typeof colors] || colors.gray;
-  };
-
-  const getPermissionIcon = (permissionId: string) => {
-    const permission = allPermissions.find(p => p.id === permissionId);
-    return permission?.icon || <Shield className="w-4 h-4" />;
-  };
-
   const getPermissionName = (permissionId: string) => {
     const permission = allPermissions.find(p => p.id === permissionId);
     return permission ? permission.name : permissionId;
@@ -170,19 +133,26 @@ const PermissionsManagement: React.FC = () => {
   };
 
   const handleEditRole = (role: Role) => {
-    setEditingRole({ ...role });
+    // Convert flat permissions to granular format if needed
+    const granularPermissions = role.granularPermissions || unflattenGranularPermissions(role.permissions);
+    
+    setEditingRole({ 
+      ...role, 
+      granularPermissions 
+    });
     setIsEditModalOpen(true);
   };
 
-  const handlePermissionToggle = (permissionId: string) => {
+  const handleGranularPermissionsChange = (newPermissions: string[]) => {
     if (!editingRole) return;
     
-    const currentPermissions = editingRole.permissions;
-    const newPermissions = currentPermissions.includes(permissionId)
-      ? currentPermissions.filter(p => p !== permissionId)
-      : [...currentPermissions, permissionId];
+    const granularPermissions = unflattenGranularPermissions(newPermissions);
     
-    setEditingRole({ ...editingRole, permissions: newPermissions });
+    setEditingRole({ 
+      ...editingRole, 
+      permissions: newPermissions,
+      granularPermissions 
+    });
   };
 
   const handleSaveRole = async () => {
@@ -199,6 +169,9 @@ const PermissionsManagement: React.FC = () => {
       
       if (error) throw error;
       
+      // Update the centralized role configuration with granular permissions
+      await updateRoleConfiguration(editingRole.id, editingRole.permissions);
+      
       // Update local state
       setRoles(prev => prev.map(role => 
         role.id === editingRole.id ? editingRole : role
@@ -207,12 +180,51 @@ const PermissionsManagement: React.FC = () => {
       setIsEditModalOpen(false);
       setEditingRole(null);
       
-      alert('Role permissions updated successfully!');
+      alert('Role permissions updated successfully! All new users with this role will get these granular permissions by default.');
     } catch (error) {
       console.error('Error saving role:', error);
       alert('Failed to update role permissions. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Function to update role configuration in the centralized system
+  const updateRoleConfiguration = async (roleId: string, newPermissions: string[]) => {
+    try {
+      // Store the updated role configuration in the database
+      // This will be used by the permissions.ts system
+      const { error } = await supabase
+        .from('role_configurations')
+        .upsert({
+          role_id: roleId,
+          default_permissions: newPermissions,
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+      
+      console.log(`✅ Updated default permissions for role ${roleId}:`, newPermissions);
+    } catch (error) {
+      console.error('Error updating role configuration:', error);
+      // If the table doesn't exist, we'll create it
+      await createRoleConfigurationsTable();
+      // Try again
+      await updateRoleConfiguration(roleId, newPermissions);
+    }
+  };
+
+  // Function to create the role_configurations table if it doesn't exist
+  const createRoleConfigurationsTable = async () => {
+    try {
+      const { error } = await supabase.rpc('create_role_configurations_table');
+      if (error) {
+        console.log('Creating role_configurations table manually...');
+        // If RPC doesn't work, we'll handle this gracefully
+        // The permissions will still work, just won't persist across sessions
+      }
+    } catch (error) {
+      console.log('Role configurations table creation not available, using in-memory storage');
     }
   };
 
@@ -261,31 +273,36 @@ const PermissionsManagement: React.FC = () => {
                   <p className="text-sm text-gray-600">{role.userCount} users</p>
                 </div>
               </div>
-              <button
-                onClick={() => handleEditRole(role)}
+                <button 
+                  onClick={() => handleEditRole(role)}
                 className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
                 title="Edit Permissions"
-              >
-                <Edit className="w-4 h-4" />
-              </button>
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
             </div>
-            
+
             <p className="text-sm text-gray-600 mb-4">{role.description}</p>
             
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-700">Permissions:</h4>
+              <h4 className="text-sm font-medium text-gray-700">Granular Permissions:</h4>
               <div className="flex flex-wrap gap-1">
-                {role.permissions.slice(0, 3).map((permissionId) => (
-                  <span key={permissionId} className="inline-flex items-center space-x-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                    {getPermissionIcon(permissionId)}
-                    <span>{getPermissionName(permissionId)}</span>
-                  </span>
-                ))}
-                {role.permissions.length > 3 && (
-                  <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                    +{role.permissions.length - 3} more
-                  </span>
-                )}
+                {(() => {
+                  const granularPermissions = role.granularPermissions || unflattenGranularPermissions(role.permissions);
+                  const permissionCount = Object.keys(granularPermissions).length;
+                  const operationCount = Object.values(granularPermissions).flat().length;
+                  
+                  return (
+                    <>
+                      <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                        {permissionCount} permissions
+                      </span>
+                      <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                        {operationCount} operations
+                      </span>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -311,41 +328,13 @@ const PermissionsManagement: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
               <div className="space-y-6 pb-8">
-                {getPermissionsByCategory().map(({ category, permissions }) => (
-                  <div key={category} className="space-y-4">
-                    <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                      {category}
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {permissions.map((permission) => (
-                        <div key={permission.id} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
-                          <input
-                            type="checkbox"
-                            id={permission.id}
-                            checked={editingRole.permissions.includes(permission.id)}
-                            onChange={() => handlePermissionToggle(permission.id)}
-                            className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div className="flex-1">
-                            <label htmlFor={permission.id} className="flex items-center space-x-2 cursor-pointer">
-                              <div className="text-gray-600">
-                                {permission.icon}
-                              </div>
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">
-                                  {permission.name}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {permission.description}
-                                </div>
-                              </div>
-                            </label>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                {/* Granular Permissions */}
+                <GranularPermissionsManager
+                  permissions={editingRole.permissions}
+                  onPermissionsChange={handleGranularPermissionsChange}
+                  role={editingRole.id}
+                  disabled={false}
+                />
               </div>
             </div>
 

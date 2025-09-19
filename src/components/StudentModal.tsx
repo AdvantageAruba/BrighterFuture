@@ -25,6 +25,8 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
   const [isEditAttendanceOpen, setIsEditAttendanceOpen] = useState(false);
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
   const [isViewNoteOpen, setIsViewNoteOpen] = useState(false);
+  const [isEditNoteMode, setIsEditNoteMode] = useState(false);
+  const [noteToEdit, setNoteToEdit] = useState<any>(null);
   const [selectedStartDate, setSelectedStartDate] = useState<string>('');
   const [selectedEndDate, setSelectedEndDate] = useState<string>('');
   
@@ -63,6 +65,8 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
     
     return {
       id: note.id,
+      student_id: note.student_id, // Add student_id for editing
+      program_id: note.program_id, // Add program_id for editing
       date: note.date,
       author: note.author_name,
       category: category,
@@ -1151,12 +1155,18 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
       {/* Add Daily Note Modal */}
       <AddDailyNote
         isOpen={isAddNoteOpen}
-        onClose={() => setIsAddNoteOpen(false)}
+        onClose={() => {
+          setIsAddNoteOpen(false);
+          setIsEditNoteMode(false);
+          setNoteToEdit(null);
+        }}
         selectedStudentId={student.id}
         onNoteAdded={() => {
           // Refresh notes data
           refreshDailyNotes();
         }}
+        editNote={noteToEdit}
+        isEditMode={isEditNoteMode}
       />
       
       {/* View Daily Note Modal */}
@@ -1167,7 +1177,8 @@ const StudentModal: React.FC<StudentModalProps> = ({ student, isOpen, onClose })
         onEdit={(note) => {
           // Close view modal and open edit modal
           setIsViewNoteOpen(false);
-          setSelectedNote(note);
+          setNoteToEdit(note);
+          setIsEditNoteMode(true);
           setIsAddNoteOpen(true);
         }}
         onDelete={async (noteId) => {

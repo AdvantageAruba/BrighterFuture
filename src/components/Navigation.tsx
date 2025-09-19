@@ -20,7 +20,9 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
     userProfile: userProfile,
     permissions: userProfile?.permissions,
     visible_tabs: userProfile?.visible_tabs,
-    role: userProfile?.role
+    role: userProfile?.role,
+    hasStudentsPermission: hasPermission('students'),
+    studentsTabInVisibleTabs: userProfile?.visible_tabs?.includes('students')
   });
   
   // Log the actual permissions array
@@ -65,7 +67,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, user }
     // Administrators always see all tabs they have permission for
     if (userProfile?.role !== 'administrator' && userProfile?.visible_tabs && userProfile.visible_tabs.length > 0) {
       if (!userProfile.visible_tabs.includes(item.id)) {
-        console.log(`❌ Filtering out ${item.id}: not in visible_tabs`);
+        console.log(`❌ Filtering out ${item.id}: not in visible_tabs (${userProfile.visible_tabs.join(', ')})`);
         return false;
       }
     }

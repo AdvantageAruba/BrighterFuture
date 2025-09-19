@@ -16,18 +16,22 @@ const Students: React.FC = () => {
   const [editingStudent, setEditingStudent] = useState(null);
   
   // Get current user information for access control
-  const { userProfile } = useAuth();
+  const { userProfile, hasPermission } = useAuth();
   
   // Use real data from Supabase
   const { 
     students: supabaseStudents, 
     programs: supabasePrograms, 
+    classes,
+    teachers,
     loading, 
     error, 
     addStudent, 
     updateStudent, 
     deleteStudent,
     getProgramName,
+    getClassById,
+    getTeacherName,
     refreshStudents
   } = useStudents();
 
@@ -62,6 +66,10 @@ const Students: React.FC = () => {
         avatar: student.picture_url || `https://images.pexels.com/photos/${Math.floor(Math.random() * 1000)}?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`,
         assessments: 0, // Will be updated when forms are implemented
         notes: 0, // Will be updated when daily notes are implemented
+        // Class and teacher information
+        className: student.class_id ? (getClassById(student.class_id)?.name || 'Unknown Class') : 'Not assigned',
+        teacher: student.class_id ? getTeacherName(student.class_id) : 'Not assigned',
+        class_id: student.class_id,
         // Store reference to original Supabase data for the modal
         originalData: student
       };
@@ -151,8 +159,8 @@ const Students: React.FC = () => {
       emergencyPhone: studentData.emergency_phone || 'Not provided',
       medicalConditions: studentData.medical_conditions || 'None known',
       allergies: studentData.allergies || 'None known',
-      className: studentData.class_name || 'Not assigned',
-      teacher: studentData.teacher || 'Not assigned',
+      className: studentData.class_id ? (getClassById(studentData.class_id)?.name || 'Unknown Class') : 'Not assigned',
+      teacher: studentData.class_id ? getTeacherName(studentData.class_id) : 'Not assigned',
       
       // Picture
       pictureUrl: studentData.picture_url,
@@ -167,35 +175,54 @@ const Students: React.FC = () => {
   };
 
   const handleEditStudent = (student: any) => {
-    setEditingStudent(student);
+    // Pass the original Supabase data to EditStudent, not the transformed data
+    const studentData = student.originalData || student;
+    setEditingStudent(studentData);
     setCurrentView('edit');
   };
 
   const handleDeleteStudent = async (studentId: number) => {
+    // Find the student to get their name for the confirmation dialog
+    const student = students.find(s => s.id === studentId);
+    const studentName = student ? student.name : 'this student';
+    
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${studentName}?\n\nThis action cannot be undone and will also delete:\n• All attendance records\n• All daily notes\n• All related data\n\nClick OK to confirm deletion, or Cancel to keep the student.`
+    );
+    
+    if (!confirmed) {
+      console.log('Student deletion cancelled by user');
+      return;
+    }
+    
     try {
+      console.log(`Deleting student: ${studentName} (ID: ${studentId})`);
       const result = await deleteStudent(studentId);
+      
       if (result.success) {
         console.log('Student deleted successfully');
+        alert(`${studentName} has been deleted successfully.`);
         // The hook will automatically update the local state
-              } else {
-          console.error('Failed to delete student:', result.error);
-          
-          // Show user-friendly error messages
-          let userMessage = 'Failed to delete student';
-          if (result.error) {
-            if (result.error.includes('foreign key constraint') || result.error.includes('attendance') || result.error.includes('daily_notes')) {
-              userMessage = 'Cannot delete student because they have related records (attendance, daily notes, etc.). The system will now automatically remove all related records and try again.';
-            } else if (result.error.includes('permission')) {
-              userMessage = 'Permission denied. You may not have the right to delete students.';
-            } else if (result.error.includes('network') || result.error.includes('connection')) {
-              userMessage = 'Network error. Please check your internet connection and try again.';
-            } else {
-              userMessage = `Failed to delete student: ${result.error}`;
-            }
+      } else {
+        console.error('Failed to delete student:', result.error);
+        
+        // Show user-friendly error messages
+        let userMessage = 'Failed to delete student';
+        if (result.error) {
+          if (result.error.includes('foreign key constraint') || result.error.includes('attendance') || result.error.includes('daily_notes')) {
+            userMessage = 'Cannot delete student because they have related records (attendance, daily notes, etc.). The system will now automatically remove all related records and try again.';
+          } else if (result.error.includes('permission')) {
+            userMessage = 'Permission denied. You may not have the right to delete students.';
+          } else if (result.error.includes('network') || result.error.includes('connection')) {
+            userMessage = 'Network error. Please check your internet connection and try again.';
+          } else {
+            userMessage = `Failed to delete student: ${result.error}`;
           }
-          
-          alert(userMessage);
         }
+        
+        alert(userMessage);
+      }
     } catch (error) {
       console.error('Error deleting student:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
@@ -312,7 +339,7 @@ const Students: React.FC = () => {
               }
             </p>
           </div>
-          {userProfile?.role !== 'parent' && (
+          {userProfile?.role !== 'parent' && hasPermission('students.create') && (
             <button 
               onClick={handleAddStudent}
               className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"

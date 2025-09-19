@@ -12,13 +12,17 @@ interface UserProfileProps {
 }
 
 const UserProfile: React.FC<UserProfileProps> = ({ user, isOpen, onClose, onEdit, onUpdateUser }) => {
-  const { changePassword } = useAuth();
+  const { changePassword, userProfile: currentUserProfile, hasPermission } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   
   // Get programs and classes data to show names instead of IDs
   const { programs, classes, getProgramName, getClassName } = useUsers();
+  
+  // Permission checking logic
+  const isEditingOwnProfile = currentUserProfile?.email === user.email;
+  const canEditRole = hasPermission('user_management') && !isEditingOwnProfile;
   
   const [formData, setFormData] = useState({
     firstName: user.first_name || '',
@@ -405,13 +409,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, isOpen, onClose, onEdit
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Role
+                      {!canEditRole && (
+                        <span className="ml-2 text-xs text-red-600 font-medium">
+                          {isEditingOwnProfile ? '(Cannot edit your own role)' : '(Admin only)'}
+                        </span>
+                      )}
+                    </label>
                     {isEditing ? (
                       <select
                         name="role"
                         value={formData.role}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={!canEditRole}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100"
                       >
                         <option value="administrator">Administrator</option>
                         <option value="teacher">Teacher</option>
@@ -424,6 +436,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, isOpen, onClose, onEdit
                       <p className="text-gray-900 flex items-center space-x-2">
                         <Shield className="w-4 h-4 text-gray-400" />
                         <span className="capitalize">{formData.role}</span>
+                      </p>
+                    )}
+                    {!canEditRole && isEditing && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {isEditingOwnProfile 
+                          ? 'You cannot change your own role for security reasons.'
+                          : 'Only administrators can change user roles.'
+                        }
                       </p>
                     )}
                   </div>

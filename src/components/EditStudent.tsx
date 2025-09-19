@@ -43,13 +43,8 @@ const EditStudent: React.FC<EditStudentProps> = ({ student, onBack, onStudentUpd
   useEffect(() => {
     console.log('EditStudent - Student object received:', student);
     console.log('EditStudent - Available fields:', Object.keys(student));
-    console.log('EditStudent - Program:', student.program);
     console.log('EditStudent - Program ID:', student.program_id);
     console.log('EditStudent - Class ID:', student.class_id);
-    console.log('EditStudent - Parent name:', student.parent_name);
-    console.log('EditStudent - Phone:', student.phone);
-    console.log('EditStudent - Email:', student.email);
-    console.log('EditStudent - Original data:', student.originalData);
   }, [student]);
 
   // Update form data when student data changes
@@ -150,6 +145,10 @@ const EditStudent: React.FC<EditStudentProps> = ({ student, onBack, onStudentUpd
         
         updated_at: new Date().toISOString()
       };
+
+      console.log('🔍 EditStudent - updateData being sent:', updateData);
+      console.log('🔍 EditStudent - class_id value:', updateData.class_id);
+      console.log('🔍 EditStudent - formData.className:', formData.className);
 
       const result = await updateStudent(student.id, updateData);
 

@@ -8,8 +8,10 @@ import BulkAttendance from './BulkAttendance';
 import { useStudents } from '../hooks/useStudents';
 import { useClassesData } from '../contexts/ClassesDataContext';
 import { useAttendance } from '../hooks/useAttendance';
+import { useAuth } from '../contexts/AuthContext';
 
 const Attendance: React.FC = () => {
+  const { hasPermission } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProgram, setSelectedProgram] = useState('all');
   const [selectedClass, setSelectedClass] = useState<string>('');
@@ -157,20 +159,24 @@ const Attendance: React.FC = () => {
             <BarChart3 className="w-4 h-4" />
             <span>Reports</span>
           </button>
-          <button
-            onClick={() => setIsBulkAttendanceOpen(true)}
-            className="flex items-center space-x-2 bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors duration-200 min-w-[140px] justify-center"
-          >
-            <Users className="w-4 h-4" />
-            <span>Bulk Attendance</span>
-          </button>
-          <button 
-            onClick={() => setIsAddAttendanceOpen(true)}
-            className="flex items-center space-x-2 bg-sky-500 text-white px-4 py-2 rounded-lg hover:bg-sky-600 transition-colors duration-200 min-w-[140px] justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Record Attendance</span>
-          </button>
+          {hasPermission('attendance.create') && (
+            <button
+              onClick={() => setIsBulkAttendanceOpen(true)}
+              className="flex items-center space-x-2 bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors duration-200 min-w-[140px] justify-center"
+            >
+              <Users className="w-4 h-4" />
+              <span>Bulk Attendance</span>
+            </button>
+          )}
+          {hasPermission('attendance.create') && (
+            <button 
+              onClick={() => setIsAddAttendanceOpen(true)}
+              className="flex items-center space-x-2 bg-sky-500 text-white px-4 py-2 rounded-lg hover:bg-sky-600 transition-colors duration-200 min-w-[140px] justify-center"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Record Attendance</span>
+            </button>
+          )}
         </div>
       </div>
 

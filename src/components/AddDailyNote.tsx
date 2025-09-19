@@ -63,8 +63,8 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedSt
         const parsedNoteData = editNote.parsedData || JSON.parse(editNote.note);
         
         setFormData({
-          program: editNote.program || '',
-          studentId: editNote.id?.toString() || '',
+          program: editNote.program_id?.toString() || '',
+          studentId: editNote.student_id?.toString() || '',
           category: parsedNoteData.category || 'behavior',
           overallMood: parsedNoteData.overallMood || 'neutral',
           generalNotes: parsedNoteData.generalNotes || '',
@@ -86,8 +86,8 @@ const AddDailyNote: React.FC<AddDailyNoteProps> = ({ isOpen, onClose, selectedSt
         // Fallback to basic data
         setFormData(prev => ({
           ...prev,
-          program: editNote.program || '',
-          studentId: editNote.id?.toString() || '',
+          program: editNote.program_id?.toString() || '',
+          studentId: editNote.student_id?.toString() || '',
           generalNotes: editNote.note || ''
         }));
       }

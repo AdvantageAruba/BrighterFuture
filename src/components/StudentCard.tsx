@@ -1,5 +1,6 @@
 import React from 'react';
 import { Eye, Edit, MoreVertical, FileText, MessageSquare, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface StudentCardProps {
   student: {
@@ -21,6 +22,7 @@ interface StudentCardProps {
 }
 
 const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onDelete, onStatusToggle }) => {
+  const { hasPermission } = useAuth();
   const getStatusColor = (status: string) => {
     return status === 'active' 
       ? 'bg-green-100 text-green-800' 
@@ -123,7 +125,7 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onDe
           <Eye className="w-4 h-4" />
           <span>View</span>
         </button>
-        {onEdit && (
+        {onEdit && hasPermission('students.edit') && (
           <button 
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
             className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors border border-gray-300"
@@ -132,7 +134,7 @@ const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onEdit, onDe
             <span>Edit</span>
           </button>
         )}
-        {onDelete && (
+        {onDelete && hasPermission('students.delete') && (
           <button 
             onClick={(e) => { e.stopPropagation(); onDelete(student.id); }}
             className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors border border-gray-300"

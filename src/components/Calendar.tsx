@@ -3,9 +3,12 @@ import { Plus, Filter, Calendar as CalendarIcon, X } from 'lucide-react';
 import AddEvent from './AddEvent';
 import EventDetails from './EventDetails';
 import CalendarGrid from './CalendarGrid';
+import RecurringEventDeleteModal from './RecurringEventDeleteModal';
 import { useEvents } from '../hooks/useEvents';
+import { useAuth } from '../contexts/AuthContext';
 
 const Calendar: React.FC = () => {
+  const { hasPermission } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -15,9 +18,11 @@ const Calendar: React.FC = () => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isEditEventOpen, setIsEditEventOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState(null);
+  const [isRecurringDeleteModalOpen, setIsRecurringDeleteModalOpen] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState(null);
 
   // Use the events hook to get real data
-  const { events, loading, error, refreshEvents, addEvent, deleteEvent } = useEvents();
+  const { events, loading, error, refreshEvents, addEvent, deleteEvent, deleteMultipleEvents, findRelatedRecurringEvents } = useEvents();
 
   // Transform events to match the expected format for CalendarGrid
   const transformedEvents = events.map(event => ({
@@ -35,12 +40,15 @@ const Calendar: React.FC = () => {
     student: event.student_name,
     notes: event.notes,
     author: event.author_name,
-    created_at: event.created_at
+    created_at: event.created_at,
+    isAdminAttending: event.isAdminAttending // Add admin attendance info
   }));
 
   const handleDateSelect = (date: string) => {
     setSelectedDate(date);
-    setIsAddEventOpen(true);
+    if (hasPermission('calendar.create')) {
+      setIsAddEventOpen(true);
+    }
   };
 
   const handleEventClick = (event: any) => {
@@ -72,6 +80,24 @@ const Calendar: React.FC = () => {
   };
 
   const handleDeleteEvent = async (eventId: number) => {
+    // Find the event to check if it's recurring
+    const event = events.find(e => e.id === eventId);
+    
+    if (!event) {
+      alert('Event not found');
+      return;
+    }
+
+    // If it's a recurring event, show the recurring delete modal
+    if (event.recurring) {
+      const relatedEvents = findRelatedRecurringEvents(event);
+      setEventToDelete({ event, relatedEvents });
+      setIsRecurringDeleteModalOpen(true);
+      setIsEventDetailsOpen(false);
+      return;
+    }
+
+    // For non-recurring events, use the simple confirmation
     if (window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
       try {
         const result = await deleteEvent(eventId);
@@ -85,6 +111,38 @@ const Calendar: React.FC = () => {
         console.error('Error deleting event:', error);
         alert('Failed to delete event. Please try again.');
       }
+    }
+  };
+
+  const handleRecurringDeleteConfirm = async (deleteAll: boolean) => {
+    if (!eventToDelete) return;
+
+    try {
+      let result;
+      if (deleteAll) {
+        // Delete all related recurring events
+        const eventIds = eventToDelete.relatedEvents.map(e => e.id);
+        result = await deleteMultipleEvents(eventIds);
+        if (result.success) {
+          alert(`Successfully deleted ${result.deletedCount} recurring events!`);
+        }
+      } else {
+        // Delete only the single event
+        result = await deleteEvent(eventToDelete.event.id);
+        if (result.success) {
+          alert('Event deleted successfully!');
+        }
+      }
+
+      if (!result.success) {
+        alert(`Failed to delete event(s): ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting event(s):', error);
+      alert('Failed to delete event(s). Please try again.');
+    } finally {
+      setIsRecurringDeleteModalOpen(false);
+      setEventToDelete(null);
     }
   };
 
@@ -121,13 +179,15 @@ const Calendar: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Calendar</h1>
           <p className="text-gray-600 mt-2">Schedule and manage sessions, meetings, and activities</p>
         </div>
-        <button 
-          onClick={handleAddEvent}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Event</span>
-        </button>
+        {hasPermission('calendar.create') && (
+          <button 
+            onClick={handleAddEvent}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Event</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -330,6 +390,20 @@ const Calendar: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Recurring Event Delete Modal */}
+      {eventToDelete && (
+        <RecurringEventDeleteModal
+          isOpen={isRecurringDeleteModalOpen}
+          onClose={() => {
+            setIsRecurringDeleteModalOpen(false);
+            setEventToDelete(null);
+          }}
+          onConfirm={handleRecurringDeleteConfirm}
+          eventTitle={eventToDelete.event.title}
+          relatedEventsCount={eventToDelete.relatedEvents.length}
+        />
       )}
     </div>
   );

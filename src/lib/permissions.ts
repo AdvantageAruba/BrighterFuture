@@ -3,6 +3,58 @@
  * Defines default permissions for each role and available permission options
  */
 
+import { supabase } from './supabase';
+
+// Define CRUD operations
+export const PERMISSION_OPERATIONS: PermissionOperation[] = [
+  {
+    id: 'view',
+    name: 'View',
+    description: 'Read and view data',
+    icon: '👁️'
+  },
+  {
+    id: 'create',
+    name: 'Create',
+    description: 'Create new records',
+    icon: '➕'
+  },
+  {
+    id: 'edit',
+    name: 'Edit',
+    description: 'Modify existing records',
+    icon: '✏️'
+  },
+  {
+    id: 'delete',
+    name: 'Delete',
+    description: 'Remove records',
+    icon: '🗑️'
+  },
+  {
+    id: 'manage',
+    name: 'Manage',
+    description: 'Full administrative control',
+    icon: '⚙️'
+  }
+];
+
+export interface PermissionOperation {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+export interface GranularPermission {
+  id: string;
+  name: string;
+  description: string;
+  category: 'management' | 'access' | 'system' | 'communication';
+  operations: PermissionOperation[];
+  required?: boolean;
+}
+
 export interface Permission {
   id: string;
   name: string;
@@ -129,13 +181,6 @@ export const AVAILABLE_PERMISSIONS: Permission[] = [
   
   // Communication Permissions
   {
-    id: 'messages',
-    name: 'Messages',
-    description: 'Send and receive internal messages',
-    category: 'communication',
-    required: false
-  },
-  {
     id: 'announcements',
     name: 'Announcements',
     description: 'Create and manage announcements',
@@ -147,6 +192,201 @@ export const AVAILABLE_PERMISSIONS: Permission[] = [
     name: 'Notifications',
     description: 'Send notifications to users',
     category: 'communication',
+    required: false
+  }
+];
+
+// Granular permissions with CRUD operations
+export const GRANULAR_PERMISSIONS: GranularPermission[] = [
+  // Management Permissions
+  {
+    id: 'students',
+    name: 'Student Management',
+    description: 'Manage student records and information',
+    category: 'management',
+    operations: [
+      { id: 'view', name: 'View', description: 'View student records', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Add new students', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify student information', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Remove students', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'programs',
+    name: 'Program Management',
+    description: 'Manage educational programs',
+    category: 'management',
+    operations: [
+      { id: 'view', name: 'View', description: 'View programs', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Create new programs', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify programs', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete programs', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'classes',
+    name: 'Class Management',
+    description: 'Manage classes and schedules',
+    category: 'management',
+    operations: [
+      { id: 'view', name: 'View', description: 'View classes', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Create new classes', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify classes', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete classes', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'users',
+    name: 'User Management',
+    description: 'Manage user accounts and roles',
+    category: 'management',
+    operations: [
+      { id: 'view', name: 'View', description: 'View user accounts', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Create new users', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify user accounts', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete user accounts', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'attendance',
+    name: 'Attendance Management',
+    description: 'Manage student attendance records',
+    category: 'management',
+    operations: [
+      { id: 'view', name: 'View', description: 'View attendance records', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Record attendance', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify attendance', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete attendance records', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'calendar',
+    name: 'Calendar Management',
+    description: 'Manage events and schedules',
+    category: 'access',
+    operations: [
+      { id: 'view', name: 'View', description: 'View calendar events', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Create new events', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify events', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete events', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'forms',
+    name: 'Forms Management',
+    description: 'Manage intake forms and assessments',
+    category: 'access',
+    operations: [
+      { id: 'view', name: 'View', description: 'View forms', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Create new forms', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify forms', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete forms', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'notes',
+    name: 'Daily Notes Management',
+    description: 'Manage daily notes and observations',
+    category: 'access',
+    operations: [
+      { id: 'view', name: 'View', description: 'View daily notes', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Create new notes', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify notes', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete notes', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'reports',
+    name: 'Reports Management',
+    description: 'Generate and manage reports',
+    category: 'access',
+    operations: [
+      { id: 'view', name: 'View', description: 'View reports', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Generate reports', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify reports', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete reports', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'waiting_list',
+    name: 'Waiting List Management',
+    description: 'Manage student waiting lists',
+    category: 'access',
+    operations: [
+      { id: 'view', name: 'View', description: 'View waiting list', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Add to waiting list', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify waiting list', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Remove from waiting list', icon: '🗑️' }
+    ],
+    required: false
+  },
+  // System Permissions
+  {
+    id: 'settings',
+    name: 'System Settings',
+    description: 'Manage system configuration',
+    category: 'system',
+    operations: [
+      { id: 'view', name: 'View', description: 'View settings', icon: '👁️' },
+      { id: 'edit', name: 'Edit', description: 'Modify settings', icon: '✏️' }
+    ],
+    required: false
+  },
+  {
+    id: 'backup',
+    name: 'Backup Management',
+    description: 'Manage system backups',
+    category: 'system',
+    operations: [
+      { id: 'view', name: 'View', description: 'View backups', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Create backups', icon: '➕' },
+      { id: 'manage', name: 'Manage', description: 'Manage backup settings', icon: '⚙️' }
+    ],
+    required: false
+  },
+  {
+    id: 'logs',
+    name: 'System Logs',
+    description: 'View and manage system logs',
+    category: 'system',
+    operations: [
+      { id: 'view', name: 'View', description: 'View system logs', icon: '👁️' },
+      { id: 'delete', name: 'Delete', description: 'Clear logs', icon: '🗑️' }
+    ],
+    required: false
+  },
+  // Communication Permissions
+  {
+    id: 'announcements',
+    name: 'Announcements',
+    description: 'Manage announcements and notifications',
+    category: 'communication',
+    operations: [
+      { id: 'view', name: 'View', description: 'View announcements', icon: '👁️' },
+      { id: 'create', name: 'Create', description: 'Create announcements', icon: '➕' },
+      { id: 'edit', name: 'Edit', description: 'Modify announcements', icon: '✏️' },
+      { id: 'delete', name: 'Delete', description: 'Delete announcements', icon: '🗑️' }
+    ],
+    required: false
+  },
+  {
+    id: 'notifications',
+    name: 'Notifications',
+    description: 'Manage notification settings',
+    category: 'communication',
+    operations: [
+      { id: 'view', name: 'View', description: 'View notifications', icon: '👁️' },
+      { id: 'edit', name: 'Edit', description: 'Modify notification settings', icon: '✏️' }
+    ],
     required: false
   }
 ];
@@ -217,13 +457,6 @@ export const AVAILABLE_TABS: TabVisibility[] = [
     defaultVisible: false
   },
   {
-    id: 'messages',
-    name: 'Messages',
-    description: 'Internal messaging system',
-    icon: 'MessageSquare',
-    defaultVisible: true
-  },
-  {
     id: 'announcements',
     name: 'Announcements',
     description: 'System announcements',
@@ -262,11 +495,11 @@ export const ROLE_PERMISSIONS: RolePermissions[] = [
     defaultPermissions: [
       'students', 'programs', 'classes', 'users', 'attendance',
       'calendar', 'forms', 'notes', 'reports', 'waiting_list',
-      'settings', 'backup', 'logs', 'messages', 'announcements', 'notifications'
+      'settings', 'backup', 'logs', 'announcements', 'notifications'
     ],
     defaultTabs: [
       'dashboard', 'students', 'programs', 'classes', 'calendar',
-      'attendance', 'forms', 'notes', 'reports', 'messages',
+      'attendance', 'forms', 'notes', 'reports',
       'announcements', 'users', 'settings', 'waiting_list'
     ],
     canCustomize: true
@@ -277,11 +510,11 @@ export const ROLE_PERMISSIONS: RolePermissions[] = [
     description: 'Educational staff with student and class management access',
     defaultPermissions: [
       'students', 'classes', 'attendance', 'calendar', 'forms', 'notes',
-      'messages', 'announcements'
+      'announcements'
     ],
     defaultTabs: [
       'dashboard', 'students', 'classes', 'calendar', 'attendance',
-      'forms', 'notes', 'messages', 'announcements'
+      'forms', 'notes', 'announcements'
     ],
     canCustomize: true
   },
@@ -290,11 +523,11 @@ export const ROLE_PERMISSIONS: RolePermissions[] = [
     roleName: 'Therapist',
     description: 'Therapy staff with specialized access to student records',
     defaultPermissions: [
-      'students', 'forms', 'notes', 'calendar', 'messages', 'announcements'
+      'students', 'forms', 'notes', 'calendar', 'announcements'
     ],
     defaultTabs: [
       'dashboard', 'students', 'forms', 'notes', 'calendar',
-      'messages', 'announcements'
+      'announcements'
     ],
     canCustomize: true
   },
@@ -304,11 +537,11 @@ export const ROLE_PERMISSIONS: RolePermissions[] = [
     description: 'Program management with oversight capabilities',
     defaultPermissions: [
       'students', 'programs', 'classes', 'attendance', 'calendar',
-      'forms', 'notes', 'reports', 'messages', 'announcements'
+      'forms', 'notes', 'reports', 'announcements'
     ],
     defaultTabs: [
       'dashboard', 'students', 'programs', 'classes', 'calendar',
-      'attendance', 'forms', 'notes', 'reports', 'messages', 'announcements'
+      'attendance', 'forms', 'notes', 'reports', 'announcements'
     ],
     canCustomize: true
   },
@@ -317,11 +550,11 @@ export const ROLE_PERMISSIONS: RolePermissions[] = [
     roleName: 'Parent/Guardian',
     description: 'Limited access to their children\'s information only',
     defaultPermissions: [
-      'students', 'calendar', 'forms', 'notes', 'messages', 'announcements'
+      'students', 'calendar', 'forms', 'notes', 'announcements'
     ],
     defaultTabs: [
       'dashboard', 'students', 'calendar', 'forms', 'notes',
-      'messages', 'announcements'
+      'announcements'
     ],
     canCustomize: false // Parents have fixed permissions for security
   },
@@ -330,30 +563,80 @@ export const ROLE_PERMISSIONS: RolePermissions[] = [
     roleName: 'Support Staff',
     description: 'General staff with basic access',
     defaultPermissions: [
-      'students', 'calendar', 'forms', 'notes', 'messages', 'announcements'
+      'students', 'calendar', 'forms', 'notes', 'announcements'
     ],
     defaultTabs: [
       'dashboard', 'students', 'calendar', 'forms', 'notes',
-      'messages', 'announcements'
+      'announcements'
     ],
     canCustomize: true
   }
 ];
 
 /**
- * Get default permissions for a role
+ * Get default permissions for a role (with dynamic override support)
  */
-export const getDefaultPermissions = (role: string): string[] => {
+export const getDefaultPermissions = async (role: string): Promise<string[]> => {
+  try {
+    // First try to get dynamic configuration from database
+    const { data: dynamicConfig } = await supabase
+      .from('role_configurations')
+      .select('default_permissions')
+      .eq('role_id', role)
+      .single();
+    
+    if (dynamicConfig?.default_permissions) {
+      console.log(`📋 Using dynamic permissions for role ${role}:`, dynamicConfig.default_permissions);
+      return dynamicConfig.default_permissions;
+    }
+  } catch (error) {
+    console.log(`📋 No dynamic config for role ${role}, using static defaults`);
+  }
+  
+  // Fallback to static configuration
   const roleConfig = ROLE_PERMISSIONS.find(r => r.role === role);
   return roleConfig ? roleConfig.defaultPermissions : [];
 };
 
 /**
- * Get default tabs for a role
+ * Get default tabs for a role (with dynamic override support)
  */
-export const getDefaultTabs = (role: string): string[] => {
+export const getDefaultTabs = async (role: string): Promise<string[]> => {
+  try {
+    // First try to get dynamic configuration from database
+    const { data: dynamicConfig } = await supabase
+      .from('role_configurations')
+      .select('default_tabs')
+      .eq('role_id', role)
+      .single();
+    
+    if (dynamicConfig?.default_tabs) {
+      console.log(`📋 Using dynamic tabs for role ${role}:`, dynamicConfig.default_tabs);
+      return dynamicConfig.default_tabs;
+    }
+  } catch (error) {
+    console.log(`📋 No dynamic config for role ${role}, using static defaults`);
+  }
+  
+  // Fallback to static configuration
   const roleConfig = ROLE_PERMISSIONS.find(r => r.role === role);
   return roleConfig ? roleConfig.defaultTabs : [];
+};
+
+/**
+ * Get default tabs for a role (synchronous version for use in JSX)
+ */
+export const getDefaultTabsSync = (role: string): string[] => {
+  const roleConfig = ROLE_PERMISSIONS.find(r => r.role === role);
+  return roleConfig ? roleConfig.defaultTabs : [];
+};
+
+/**
+ * Get default permissions for a role (synchronous version for use in JSX)
+ */
+export const getDefaultPermissionsSync = (role: string): string[] => {
+  const roleConfig = ROLE_PERMISSIONS.find(r => r.role === role);
+  return roleConfig ? roleConfig.defaultPermissions : [];
 };
 
 /**
@@ -421,4 +704,107 @@ export const getPermissionById = (id: string): Permission | undefined => {
  */
 export const getTabById = (id: string): TabVisibility | undefined => {
   return AVAILABLE_TABS.find(t => t.id === id);
+};
+
+// ===== GRANULAR PERMISSION UTILITIES =====
+
+/**
+ * Convert granular permissions to flat permission strings
+ * Example: { students: ['view', 'create'] } -> ['students.view', 'students.create']
+ */
+export const flattenGranularPermissions = (granularPermissions: Record<string, string[]>): string[] => {
+  const flattened: string[] = [];
+  
+  Object.entries(granularPermissions).forEach(([permissionId, operations]) => {
+    operations.forEach(operation => {
+      flattened.push(`${permissionId}.${operation}`);
+    });
+  });
+  
+  return flattened;
+};
+
+/**
+ * Convert flat permission strings to granular permissions
+ * Example: ['students.view', 'students.create'] -> { students: ['view', 'create'] }
+ */
+export const unflattenGranularPermissions = (flatPermissions: string[]): Record<string, string[]> => {
+  const granular: Record<string, string[]> = {};
+  
+  flatPermissions.forEach(permission => {
+    const [permissionId, operation] = permission.split('.');
+    if (permissionId && operation) {
+      if (!granular[permissionId]) {
+        granular[permissionId] = [];
+      }
+      granular[permissionId].push(operation);
+    }
+  });
+  
+  return granular;
+};
+
+/**
+ * Get granular permission details by ID
+ */
+export const getGranularPermissionById = (id: string): GranularPermission | undefined => {
+  return GRANULAR_PERMISSIONS.find(p => p.id === id);
+};
+
+/**
+ * Get operation details by ID
+ */
+export const getOperationById = (id: string): PermissionOperation | undefined => {
+  return PERMISSION_OPERATIONS.find(op => op.id === id);
+};
+
+/**
+ * Check if user has specific granular permission
+ * Example: hasGranularPermission(userPermissions, 'students', 'create')
+ */
+export const hasGranularPermission = (
+  userPermissions: string[], 
+  permissionId: string, 
+  operation: string
+): boolean => {
+  return userPermissions.includes(`${permissionId}.${operation}`);
+};
+
+/**
+ * Get default granular permissions for a role
+ */
+export const getDefaultGranularPermissions = (role: string): Record<string, string[]> => {
+  const roleConfig = ROLE_PERMISSIONS.find(r => r.role === role);
+  if (!roleConfig) return {};
+  
+  // Convert flat permissions to granular format
+  const granular: Record<string, string[]> = {};
+  
+  roleConfig.defaultPermissions.forEach(permissionId => {
+    const granularPermission = getGranularPermissionById(permissionId);
+    if (granularPermission) {
+      // Default to all operations for backward compatibility
+      granular[permissionId] = granularPermission.operations.map(op => op.id);
+    }
+  });
+  
+  return granular;
+};
+
+/**
+ * Get permissions by category for granular permissions
+ */
+export const getGranularPermissionsByCategory = (): Record<string, GranularPermission[]> => {
+  const categories: Record<string, GranularPermission[]> = {
+    management: [],
+    access: [],
+    system: [],
+    communication: []
+  };
+  
+  GRANULAR_PERMISSIONS.forEach(permission => {
+    categories[permission.category].push(permission);
+  });
+  
+  return categories;
 };

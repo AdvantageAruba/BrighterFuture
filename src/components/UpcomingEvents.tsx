@@ -24,16 +24,24 @@ const UpcomingEvents: React.FC<UpcomingEventsProps> = ({ setActiveTab }) => {
       });
   }, [events]);
 
-  const getEventColor = (type: string) => {
+  const getEventColor = (type: string, isAdminAttending?: boolean) => {
+    let baseColor = '';
     switch (type) {
-      case 'meeting': return 'border-l-blue-500 bg-blue-50';
-      case 'therapy': return 'border-l-green-500 bg-green-50';
-      case 'consultation': return 'border-l-purple-500 bg-purple-50';
-      case 'assessment': return 'border-l-orange-500 bg-orange-50';
-      case 'training': return 'border-l-indigo-500 bg-indigo-50';
-      case 'other': return 'border-l-gray-500 bg-gray-50';
-      default: return 'border-l-gray-500 bg-gray-50';
+      case 'meeting': baseColor = 'border-l-blue-500 bg-blue-50'; break;
+      case 'therapy': baseColor = 'border-l-green-500 bg-green-50'; break;
+      case 'consultation': baseColor = 'border-l-purple-500 bg-purple-50'; break;
+      case 'assessment': baseColor = 'border-l-orange-500 bg-orange-50'; break;
+      case 'training': baseColor = 'border-l-indigo-500 bg-indigo-50'; break;
+      case 'other': baseColor = 'border-l-gray-500 bg-gray-50'; break;
+      default: baseColor = 'border-l-gray-500 bg-gray-50'; break;
     }
+    
+    // Add admin highlighting with border and shadow
+    if (isAdminAttending) {
+      return `${baseColor} border-2 border-yellow-400 shadow-lg ring-2 ring-yellow-200 ring-opacity-50`;
+    }
+    
+    return baseColor;
   };
 
   const formatTime = (time: string) => {
@@ -94,7 +102,7 @@ const UpcomingEvents: React.FC<UpcomingEventsProps> = ({ setActiveTab }) => {
             todaysEvents.map((event) => (
               <div
                 key={event.id}
-                className={`p-4 rounded-lg border-l-4 ${getEventColor(event.type)} hover:shadow-md hover:scale-[1.02] transition-all duration-200 cursor-pointer group`}
+                className={`p-4 rounded-lg border-l-4 ${getEventColor(event.type, event.isAdminAttending)} hover:shadow-md hover:scale-[1.02] transition-all duration-200 cursor-pointer group`}
                 onClick={() => handleEventClick(event)}
               >
                 <div className="flex items-start justify-between">
@@ -120,6 +128,11 @@ const UpcomingEvents: React.FC<UpcomingEventsProps> = ({ setActiveTab }) => {
                       {event.student_name && (
                         <div className="text-sm text-gray-600 mt-1">
                           <span className="font-medium">Student:</span> {event.student_name}
+                        </div>
+                      )}
+                      {event.author_name && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          <span className="font-medium">Created by:</span> {event.author_name}
                         </div>
                       )}
                     </div>

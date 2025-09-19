@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Calendar, Clock, MapPin, Users, FileText, Edit, Trash2, Copy } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface EventDetailsProps {
   event: {
@@ -16,6 +17,7 @@ interface EventDetailsProps {
     program?: string;
     student?: string;
     notes?: string;
+    isAdminAttending?: boolean; // Add admin attendance info
   };
   isOpen: boolean;
   onClose: () => void;
@@ -24,6 +26,8 @@ interface EventDetailsProps {
 }
 
 const EventDetails: React.FC<EventDetailsProps> = ({ event, isOpen, onClose, onEdit, onDelete }) => {
+  const { hasPermission } = useAuth();
+  
   if (!isOpen) return null;
 
   const getEventColor = (type: string) => {
@@ -71,6 +75,12 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event, isOpen, onClose, onE
             <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getEventColor(event.type)}`}>
               {event.type}
             </div>
+            {event.isAdminAttending && (
+              <div className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-200 flex items-center space-x-1">
+                <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                <span>You're Attending</span>
+              </div>
+            )}
             <div>
               <h2 className="text-xl font-bold text-gray-900">{event.title}</h2>
               <p className="text-gray-600">{formatDate(event.date)}</p>
@@ -178,20 +188,24 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event, isOpen, onClose, onE
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
               <div className="flex flex-wrap gap-3">
-                <button 
-                  onClick={() => onEdit?.(event)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-                >
-                  <Edit className="w-4 h-4" />
-                  <span>Edit Event</span>
-                </button>
-                <button 
-                  onClick={() => onDelete?.(event.id)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Delete Event</span>
-                </button>
+                {hasPermission('calendar.edit') && (
+                  <button 
+                    onClick={() => onEdit?.(event)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span>Edit Event</span>
+                  </button>
+                )}
+                {hasPermission('calendar.delete') && (
+                  <button 
+                    onClick={() => onDelete?.(event.id)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Event</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

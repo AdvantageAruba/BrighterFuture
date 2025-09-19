@@ -201,11 +201,11 @@ const InvitationPage: React.FC = () => {
             window.location.href = '/';
           }, 3000);
         } else {
-          console.log('✅ Auto sign-in successful, redirecting to dashboard');
-          // If auto sign-in succeeds, redirect to dashboard
+          console.log('✅ Auto sign-in successful, waiting for profile to load...');
+          // If auto sign-in succeeds, wait a bit longer for profile to load
           setTimeout(() => {
-            window.location.href = '/dashboard';
-          }, 2000);
+            window.location.href = '/';
+          }, 3000);
         }
       } catch (signInErr) {
         console.log('Auto sign-in error, redirecting to login page:', signInErr);

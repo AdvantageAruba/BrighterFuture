@@ -314,7 +314,40 @@ export const useUsers = () => {
         .eq('id', id)
         .select()
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ updateUser - Database error:', error);
+        
+        // Check if the error is due to missing granular_permissions column
+        if (error.code === '42703' && error.message?.includes('granular_permissions')) {
+          console.warn('⚠️ granular_permissions column does not exist. Attempting to update without it...');
+          
+          // Remove granular_permissions from updates and try again
+          const { granular_permissions, ...updatesWithoutGranular } = updates;
+          
+          const { data: retryData, error: retryError } = await supabase
+            .from('users')
+            .update({ ...updatesWithoutGranular, updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .select()
+          
+          if (retryError) {
+            console.error('❌ updateUser - Retry failed:', retryError);
+            throw retryError;
+          }
+          
+          if (retryData) {
+            const updatedUser = retryData[0]
+            setUsers(prev => prev.map(user => 
+              user.id === id ? { ...user, ...updatesWithoutGranular, updated_at: new Date().toISOString() } : user
+            ))
+            
+            console.warn('⚠️ User updated successfully but granular_permissions were not saved. Please run the database migration.');
+            return { success: true, data: updatedUser, warning: 'granular_permissions field not found in database' }
+          }
+        }
+        
+        throw error;
+      }
       
       if (data) {
         const updatedUser = data[0]

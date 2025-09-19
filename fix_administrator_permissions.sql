@@ -1,20 +1,24 @@
--- Fix administrator permissions to include all required permissions
--- This ensures administrators have access to all tabs
+-- Fix administrator permissions to include announcements
+-- This script adds the missing 'announcements' permission to all administrator users
 
+-- Update all administrator users to include announcements permission
 UPDATE users 
-SET permissions = ARRAY[
-    'students', 'programs', 'classes', 'users', 'attendance',
-    'calendar', 'forms', 'notes', 'reports', 'waiting_list',
-    'settings', 'backup', 'logs', 'messages', 'announcements', 'notifications'
-],
-visible_tabs = ARRAY[
-    'dashboard', 'students', 'programs', 'classes', 'calendar',
-    'attendance', 'forms', 'notes', 'reports', 'messages',
-    'announcements', 'users', 'settings', 'waiting_list'
-]
-WHERE role = 'administrator';
+SET permissions = permissions || ARRAY['announcements']
+WHERE role = 'administrator' 
+AND NOT ('announcements' = ANY(permissions));
 
--- Verify the update
-SELECT id, first_name, last_name, email, role, permissions, visible_tabs 
+-- Also add 'all' permission to administrators for full access
+UPDATE users 
+SET permissions = permissions || ARRAY['all']
+WHERE role = 'administrator' 
+AND NOT ('all' = ANY(permissions));
+
+-- Verify the changes
+SELECT 
+    first_name, 
+    last_name, 
+    email, 
+    role, 
+    permissions
 FROM users 
 WHERE role = 'administrator';

@@ -1,13 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Bell, Plus, Clock, User, Edit } from 'lucide-react';
 import { useAnnouncements } from '../hooks/useAnnouncements';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AnnouncementsWidgetProps {
   setActiveTab: (tab: string) => void;
 }
 
 const AnnouncementsWidget: React.FC<AnnouncementsWidgetProps> = ({ setActiveTab }) => {
-  const { announcements, loading } = useAnnouncements();
+  const { userProfile } = useAuth();
+  const { announcements, loading, isInitialized, fetchAnnouncements } = useAnnouncements();
+
+  // Fetch announcements with role-based filtering
+  useEffect(() => {
+    if (userProfile?.role) {
+      fetchAnnouncements(userProfile.role);
+    }
+  }, [userProfile?.role, fetchAnnouncements]);
 
   // Get recent active announcements (last 5)
   const recentAnnouncements = announcements
@@ -26,9 +35,10 @@ const AnnouncementsWidget: React.FC<AnnouncementsWidgetProps> = ({ setActiveTab 
   const getTargetAudienceColor = (audience: string) => {
     switch (audience) {
       case 'all': return 'text-blue-600 bg-blue-100';
-      case 'students': return 'text-purple-600 bg-purple-100';
-      case 'parents': return 'text-orange-600 bg-orange-100';
-      case 'staff': return 'text-indigo-600 bg-indigo-100';
+      case 'administrator': return 'text-red-600 bg-red-100';
+      case 'teacher': return 'text-green-600 bg-green-100';
+      case 'parent': return 'text-purple-600 bg-purple-100';
+      case 'student': return 'text-orange-600 bg-orange-100';
       default: return 'text-gray-600 bg-gray-100';
     }
   };
@@ -80,7 +90,7 @@ const AnnouncementsWidget: React.FC<AnnouncementsWidgetProps> = ({ setActiveTab 
         </button>
       </div>
 
-      {loading ? (
+      {loading || !isInitialized ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="animate-pulse">
@@ -109,9 +119,16 @@ const AnnouncementsWidget: React.FC<AnnouncementsWidgetProps> = ({ setActiveTab 
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(announcement.priority)}`}>
                     {announcement.priority.charAt(0).toUpperCase() + announcement.priority.slice(1)}
                   </span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTargetAudienceColor(announcement.target_audience)}`}>
-                    {announcement.target_audience.charAt(0).toUpperCase() + announcement.target_audience.slice(1)}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {(announcement.target_audiences || [announcement.target_audience || 'all']).map((audience, index) => (
+                      <span
+                        key={index}
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getTargetAudienceColor(audience)}`}
+                      >
+                        {audience.charAt(0).toUpperCase() + audience.slice(1)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
               

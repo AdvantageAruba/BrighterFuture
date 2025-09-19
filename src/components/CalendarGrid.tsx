@@ -25,14 +25,22 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  const getEventColor = (type: string) => {
+  const getEventColor = (type: string, isAdminAttending?: boolean) => {
+    let baseColor = '';
     switch (type) {
-      case 'meeting': return 'bg-blue-500 text-white';
-      case 'therapy': return 'bg-green-500 text-white';
-      case 'assessment': return 'bg-purple-500 text-white';
-      case 'consultation': return 'bg-orange-500 text-white';
-      default: return 'bg-gray-500 text-white';
+      case 'meeting': baseColor = 'bg-blue-500 text-white'; break;
+      case 'therapy': baseColor = 'bg-green-500 text-white'; break;
+      case 'assessment': baseColor = 'bg-purple-500 text-white'; break;
+      case 'consultation': baseColor = 'bg-orange-500 text-white'; break;
+      default: baseColor = 'bg-gray-500 text-white'; break;
     }
+    
+    // Add admin highlighting with border and shadow
+    if (isAdminAttending) {
+      return `${baseColor} border-2 border-yellow-400 shadow-lg ring-2 ring-yellow-200 ring-opacity-50`;
+    }
+    
+    return baseColor;
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -101,7 +109,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
         <div className="grid grid-cols-7 gap-0">
           {days.map((day, index) => {
             if (!day) {
-              return <div key={`empty-${index}`} className="h-24 border-r border-b border-gray-200"></div>;
+              return <div key={`empty-${index}`} className="h-32 border-r border-b border-gray-200"></div>;
             }
             
             const dateString = formatDateString(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
@@ -111,27 +119,27 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             return (
               <div
                 key={`${currentDate.getFullYear()}-${currentDate.getMonth()}-${day}-${index}`}
-                className="h-24 border-r border-b border-gray-200 p-1 cursor-pointer hover:bg-gray-50 transition-colors duration-150"
+                className="h-32 border-r border-b border-gray-200 p-1 cursor-pointer hover:bg-gray-50 transition-colors duration-150 overflow-hidden"
                 onClick={() => onDateSelect(dateString)}
               >
                 <div className={`text-sm font-medium mb-1 ${isCurrentDay ? 'text-blue-600' : 'text-gray-900'}`}>
                   {day}
                 </div>
-                <div className="space-y-1">
-                  {dayEvents.slice(0, 2).map((event) => (
+                <div className="space-y-0.5 overflow-hidden">
+                  {dayEvents.slice(0, 4).map((event) => (
                     <div
                       key={event.id}
-                      className={`text-xs px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 ${getEventColor(event.type)}`}
+                      className={`text-xs px-1 py-0.5 rounded cursor-pointer hover:opacity-80 overflow-hidden ${getEventColor(event.type, event.isAdminAttending)}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEventClick(event);
                       }}
                     >
-                      {event.title}
+                      <div className="truncate font-medium">{event.title}</div>
                     </div>
                   ))}
-                  {dayEvents.length > 2 && (
-                    <div className="text-xs text-gray-500">+{dayEvents.length - 2} more</div>
+                  {dayEvents.length > 4 && (
+                    <div className="text-xs text-gray-500">+{dayEvents.length - 4} more</div>
                   )}
                 </div>
               </div>
@@ -179,21 +187,25 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                   return (
                     <div
                       key={`${day.toISOString()}-${hour}`}
-                      className="h-16 border-r border-b border-gray-200 p-1 cursor-pointer hover:bg-gray-50 transition-colors duration-150"
+                      className={`border-r border-b border-gray-200 p-1 cursor-pointer hover:bg-gray-50 transition-colors duration-150 overflow-hidden ${
+                        dayEvents.length > 2 ? 'h-24' : dayEvents.length > 1 ? 'h-20' : 'h-16'
+                      }`}
                       onClick={() => onDateSelect(dateString)}
                     >
-                      {dayEvents.map((event) => (
-                        <div
-                          key={event.id}
-                          className={`text-xs px-2 py-1 rounded mb-1 cursor-pointer hover:opacity-80 ${getEventColor(event.type)}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEventClick(event);
-                          }}
-                        >
-                          {event.title}
-                        </div>
-                      ))}
+                      <div className="space-y-0.5">
+                        {dayEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            className={`text-xs px-1 py-0.5 rounded cursor-pointer hover:opacity-80 overflow-hidden ${getEventColor(event.type, event.isAdminAttending)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEventClick(event);
+                            }}
+                          >
+                            <div className="font-medium truncate">{event.title}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
@@ -253,6 +265,16 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     );
   };
 
+  // Event type legend data
+  const eventTypeLegend = [
+    { type: 'meeting', name: 'Meeting', color: 'bg-blue-500', textColor: 'text-white' },
+    { type: 'therapy', name: 'Therapy Session', color: 'bg-green-500', textColor: 'text-white' },
+    { type: 'assessment', name: 'Assessment', color: 'bg-purple-500', textColor: 'text-white' },
+    { type: 'consultation', name: 'Consultation', color: 'bg-orange-500', textColor: 'text-white' },
+    { type: 'training', name: 'Training', color: 'bg-indigo-500', textColor: 'text-white' },
+    { type: 'other', name: 'Other', color: 'bg-gray-500', textColor: 'text-white' }
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -279,6 +301,29 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
           >
             <ChevronRight className="w-5 h-5 text-gray-600" />
           </button>
+        </div>
+      </div>
+
+      {/* Event Type Legend */}
+      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-gray-700">Event Types</h3>
+          <div className="flex items-center space-x-2 text-xs text-gray-500">
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-yellow-400 border border-yellow-500 rounded"></div>
+              <span>Admin Attending</span>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {eventTypeLegend.map((eventType) => (
+            <div key={eventType.type} className="flex items-center space-x-2">
+              <div className={`w-4 h-4 rounded ${eventType.color} ${eventType.textColor} text-xs flex items-center justify-center font-medium`}>
+                {eventType.name.charAt(0)}
+              </div>
+              <span className="text-sm text-gray-600">{eventType.name}</span>
+            </div>
+          ))}
         </div>
       </div>
       

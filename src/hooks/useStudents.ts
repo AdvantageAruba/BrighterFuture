@@ -69,14 +69,22 @@ export const useStudents = () => {
   const fetchStudents = async () => {
     try {
       setLoading(true)
+      console.log('🔍 Fetching students...')
+      
       const { data, error } = await supabase
         .from('students')
         .select('*')
         .order('name')
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Error fetching students:', error)
+        throw error
+      }
+      
+      console.log('✅ Students fetched successfully:', data?.length || 0)
       setStudents(data || [])
     } catch (err) {
+      console.error('❌ Failed to fetch students:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch students')
     } finally {
       setLoading(false)
@@ -156,22 +164,79 @@ export const useStudents = () => {
   // Update student
   const updateStudent = async (id: number, updates: Partial<Student>) => {
     try {
+      console.log('🔍 updateStudent called with:', { id, updates });
+      console.log('🔍 updateStudent - class_id being sent:', updates.class_id);
+      console.log('🔍 updateStudent - class_name being sent:', updates.class_name);
+      console.log('🔍 updateStudent - program_id being sent:', updates.program_id);
+      
+      // First, let's check what the current student data looks like
+      const { data: currentStudent, error: fetchError } = await supabase
+        .from('students')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) {
+        console.error('❌ Error fetching current student:', fetchError);
+      } else {
+        console.log('🔍 Current student data:', currentStudent);
+      }
+      
+      // Check current authentication status
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      console.log('🔍 Current auth user:', authUser);
+      
+      // Map class_id to class_name for database update
+      const updateData = { ...updates, updated_at: new Date().toISOString() };
+      
+      // If class_id is provided, map it to class_name for the database
+      if (updates.class_id !== undefined) {
+        // Get the class name from the class_id
+        const classData = classes.find(c => c.id === updates.class_id);
+        updateData.class_name = classData ? classData.name : null;
+        delete updateData.class_id; // Remove class_id since database uses class_name
+      }
+      
+      console.log('🔍 Exact update data being sent to database:', updateData);
+      console.log('🔍 Update data class_name:', updateData.class_name);
+      console.log('🔍 Update data class_name type:', typeof updateData.class_name);
+      
       const { data, error } = await supabase
         .from('students')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', id)
         .select()
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Database update error:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+      
+      console.log('✅ Database update successful:', data);
+      console.log('✅ Updated student class_name:', data?.[0]?.class_name);
+      console.log('✅ Updated student program_id:', data?.[0]?.program_id);
+      console.log('🔍 Returned data class_name type:', typeof data?.[0]?.class_name);
+      console.log('🔍 Full returned student data:', data?.[0]);
       
       if (data) {
         setStudents(prev => prev.map(student => 
           student.id === id ? { ...student, ...updates, updated_at: new Date().toISOString() } : student
         ))
+        
+        // Refresh the students data to ensure UI is updated
+        console.log('🔄 Refreshing students data after update...');
+        await fetchStudents();
       }
       
       return { success: true, data: data?.[0] }
     } catch (err) {
+      console.error('❌ updateStudent catch block:', err);
       setError(err instanceof Error ? err.message : 'Failed to update student')
       return { success: false, error: err instanceof Error ? err.message : 'Failed to update student' }
     }
@@ -382,10 +447,61 @@ export const useStudents = () => {
   }
 
   useEffect(() => {
-    fetchStudents()
-    fetchPrograms()
-    fetchTeachers()
-    fetchClasses()
+    const loadAllData = async () => {
+      console.log('🚀 Starting to load all data...')
+      setLoading(true)
+      
+      try {
+        // Load all data in parallel for better performance
+        const [studentsResult, programsResult, teachersResult, classesResult] = await Promise.allSettled([
+          supabase.from('students').select('*').order('name'),
+          supabase.from('programs').select('*').order('name'),
+          supabase.from('users').select('*').eq('role', 'teacher').order('first_name'),
+          supabase.from('classes').select('*').order('name')
+        ])
+
+        // Process students
+        if (studentsResult.status === 'fulfilled' && !studentsResult.value.error) {
+          console.log('✅ Students loaded:', studentsResult.value.data?.length || 0)
+          setStudents(studentsResult.value.data || [])
+        } else {
+          console.error('❌ Failed to load students:', studentsResult.status === 'rejected' ? studentsResult.reason : studentsResult.value.error)
+        }
+
+        // Process programs
+        if (programsResult.status === 'fulfilled' && !programsResult.value.error) {
+          console.log('✅ Programs loaded:', programsResult.value.data?.length || 0)
+          setPrograms(programsResult.value.data || [])
+        } else {
+          console.error('❌ Failed to load programs:', programsResult.status === 'rejected' ? programsResult.reason : programsResult.value.error)
+        }
+
+        // Process teachers
+        if (teachersResult.status === 'fulfilled' && !teachersResult.value.error) {
+          console.log('✅ Teachers loaded:', teachersResult.value.data?.length || 0)
+          setTeachers(teachersResult.value.data || [])
+        } else {
+          console.error('❌ Failed to load teachers:', teachersResult.status === 'rejected' ? teachersResult.reason : teachersResult.value.error)
+        }
+
+        // Process classes
+        if (classesResult.status === 'fulfilled' && !classesResult.value.error) {
+          console.log('✅ Classes loaded:', classesResult.value.data?.length || 0)
+          setClasses(classesResult.value.data || [])
+        } else {
+          console.error('❌ Failed to load classes:', classesResult.status === 'rejected' ? classesResult.reason : classesResult.value.error)
+        }
+
+        console.log('🎉 All data loading completed!')
+      } catch (error) {
+        console.error('❌ Error loading data:', error)
+        setError('Failed to load data')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadAllData()
   }, [])
 
   return {
